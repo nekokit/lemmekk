@@ -106,10 +106,10 @@ pub struct PasswordFile {
     pub passwords: Vec<Password>,
 }
 
-impl From<&Vec<Password>> for PasswordFile {
-    fn from(value: &Vec<Password>) -> Self {
+impl From<&[Password]> for PasswordFile {
+    fn from(value: &[Password]) -> Self {
         Self {
-            passwords: value.clone(),
+            passwords: value.to_vec(),
         }
     }
 }
@@ -134,7 +134,7 @@ impl PasswordFile {
         fs::write(path, &toml::to_string(self)?)?;
         Ok(())
     }
-    pub fn add_passwords(&mut self, list: &Vec<String>) -> usize {
+    pub fn add_passwords(&mut self, list: &[String]) -> usize {
         if list.len() < 1 {
             return 0;
         };
@@ -155,7 +155,7 @@ impl PasswordFile {
         self.passwords.len() - start
     }
 
-    pub fn del_passwords(&mut self, list: &Vec<String>) -> usize {
+    pub fn del_passwords(&mut self, list: &[String]) -> usize {
         let indexs = self
             .passwords
             .iter()
