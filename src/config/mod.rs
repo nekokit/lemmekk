@@ -2,7 +2,6 @@
 //! 提供默认配置、新建配置文件和从配置文件读取配置。
 
 use std::{
-    error::Error,
     fmt::Display,
     fs,
     io::Write,
@@ -10,13 +9,13 @@ use std::{
 };
 
 use clap::ValueEnum;
-use log::{error, info, warn};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app::{CliArgs, Command, PasswordProcess},
     log::LogLevel,
-    DEFAULT_PATH,
+    AppError, DEFAULT_PATH,
 };
 
 mod sample;
@@ -43,11 +42,14 @@ impl Config {
     ///
     /// - `path` - 文件路径
     ///
-    pub fn check_path(path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn check_path(path: &Path) -> Result<(), AppError> {
         if !path.exists() {
             Self::create_sample(path)?;
         } else if !path.is_file() {
-            error_chain::bail!("配置文件位置有误: '{}'", path.display());
+            return Err(AppError::Config(format!(
+                "Wrong config path: '{}'",
+                path.display()
+            )));
         }
         Ok(())
     }
@@ -61,7 +63,7 @@ impl Config {
     ///
     /// 文件中的配置
     ///
-    pub fn load(path: &Path) -> Result<Self, Box<dyn Error>> {
+    pub fn load(path: &Path) -> Result<Self, AppError> {
         let config: Config = toml::from_str(&fs::read_to_string(path)?)?;
         Ok(config)
     }
@@ -72,7 +74,7 @@ impl Config {
     ///
     /// - `path` - 文件路径
     ///
-    fn create_sample(path: &Path) -> Result<(), Box<dyn Error>> {
+    fn create_sample(path: &Path) -> Result<(), AppError> {
         fs::File::create(path)?.write_all(sample::CONFIG.as_bytes())?;
         Ok(())
     }
@@ -172,14 +174,15 @@ impl Config {
     }
 
     /// 检查 general 配置段，若文件不存在则创建示例文件
-    pub fn check_general(&self) -> Result<(), Box<dyn Error>> {
+    pub fn check_general(&self) -> Result<(), AppError> {
         if !self.general.log_path.exists() || self.general.log_path.is_file() {
             fs::File::create(&self.general.log_path)?;
             info!("使用日志文件: '{}'", self.general.log_path.display());
         } else {
-            let msg = format!("指定的日志路径有误: '{}'", self.general.log_path.display());
-            error!("{}", msg);
-            error_chain::bail!("{}", msg);
+            return Err(AppError::Config(format!(
+                "Wrong log path: '{}'",
+                self.general.log_path.display()
+            )));
         };
 
         if !self.general.password_path.exists() {
@@ -190,12 +193,10 @@ impl Config {
             fs::File::create(&self.general.password_path)?
                 .write_all(sample::PASSWORDS.as_bytes())?;
         } else if !self.general.password_path.is_file() {
-            let msg = format!(
-                "指定的密码文件路径有误: '{}'",
-                self.general.password_path.display()
-            );
-            error!("{}", msg);
-            error_chain::bail!("{}", msg);
+            return Err(AppError::Config(format!(
+                "Wrong password file path: '{}'",
+                self.general.log_path.display()
+            )));
         };
 
         Ok(())

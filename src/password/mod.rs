@@ -1,14 +1,14 @@
 //! # 密码模型
 //! 提供密码的各种模型。
 
-use std::{error::Error, fmt::Display, fs, path::Path};
+use std::{fmt::Display, fs, path::Path};
 
 use chrono::{Duration, Local, Utc};
 use colored::Colorize;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-use crate::config::PasswordConvertType;
+use crate::{config::PasswordConvertType, AppError};
 
 /// # 密码结构
 /// 提供密码的各种模型。
@@ -118,7 +118,7 @@ impl PasswordFile {
     pub fn new() -> Self {
         Self { passwords: vec![] }
     }
-    pub fn load(path: &Path) -> Result<PasswordFile, Box<dyn Error>> {
+    pub fn load(path: &Path) -> Result<PasswordFile, AppError> {
         if !path.exists() {}
         let passwords: PasswordFile = toml::from_str(&fs::read_to_string(path)?)?;
         Ok(passwords)
@@ -126,11 +126,11 @@ impl PasswordFile {
     pub fn count(&self) -> usize {
         self.passwords.len()
     }
-    pub fn write(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn write(&self, path: &Path) -> Result<(), AppError> {
         fs::write(path, &toml::to_string(self)?)?;
         Ok(())
     }
-    pub fn write_sample(&self, path: &Path) -> Result<(), Box<dyn Error>> {
+    pub fn write_sample(&self, path: &Path) -> Result<(), AppError> {
         fs::write(path, &toml::to_string(self)?)?;
         Ok(())
     }
@@ -184,7 +184,7 @@ impl PasswordFile {
         &self,
         path: &Path,
         convert_type: &PasswordConvertType,
-    ) -> Result<usize, Box<dyn Error>> {
+    ) -> Result<usize, AppError> {
         match convert_type {
             PasswordConvertType::Text => {
                 let write_str = self
@@ -212,7 +212,7 @@ impl PasswordFile {
         &mut self,
         path: &Path,
         convert_type: &PasswordConvertType,
-    ) -> Result<usize, Box<dyn Error>> {
+    ) -> Result<usize, AppError> {
         match convert_type {
             PasswordConvertType::Text => {
                 let file_str = fs::read_to_string(path)?;

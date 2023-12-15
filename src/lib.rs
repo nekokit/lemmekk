@@ -11,11 +11,13 @@ use std::{
 
 mod app;
 mod config;
+mod error;
 mod log;
 mod password;
 
 pub use app::Application;
 pub use app::CliArgs;
+pub use error::AppError;
 pub use password::Password;
 pub use password::PasswordFile;
 pub use password::PasswordList;

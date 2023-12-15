@@ -1,10 +1,11 @@
 //! # 应用程序
 
-use std::{error::Error, fs, path::PathBuf};
+use std::{fs, path::PathBuf};
 
 use colored::Colorize;
 use log::{debug, info};
 
+use crate::AppError;
 use crate::{config::Config, PasswordFile, PasswordList, DEFAULT_PATH};
 
 mod args;
@@ -27,7 +28,7 @@ pub struct Application<'a> {
 }
 
 impl<'a> Application<'a> {
-    pub fn create(args: CliArgs) -> Result<Self, Box<dyn Error>> {
+    pub fn create(args: CliArgs) -> Result<Self, AppError> {
         let path = match &args.config_file {
             Some(p) => p.clone(),
             None => DEFAULT_PATH.config(),
@@ -44,7 +45,7 @@ impl<'a> Application<'a> {
         })
     }
 
-    pub fn run(&'a mut self) -> Result<(), Box<dyn Error>> {
+    pub fn run(&'a mut self) -> Result<(), AppError> {
         debug!("{:?}", self.args);
         debug!("{:?}", self.config);
 
