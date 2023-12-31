@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app::{CliArgs, Command, PasswordProcess},
     log::LogLevel,
-    AppError, DEFAULT_PATH,
+    AppError, PasswordFile, DEFAULT_PATH,
 };
 
 mod sample;
@@ -29,7 +29,7 @@ pub struct Config {
     pub general: GeneralConfig,
 
     /// 解压配置
-    pub extract: ExractConfig,
+    pub extract: ExtractConfig,
 
     /// 转换配置
     pub convert: ConvertConfig,
@@ -53,6 +53,18 @@ impl Config {
         }
         Ok(())
     }
+
+    /// 在指定路径创建配置样板
+    ///
+    /// # Arguments
+    ///
+    /// - `path` - 文件路径
+    ///
+    fn create_sample(path: &Path) -> Result<(), AppError> {
+        fs::File::create(path)?.write_all(sample::CONFIG.as_bytes())?;
+        Ok(())
+    }
+
     /// 从文件载入配置文件
     ///
     /// # Arguments
@@ -66,17 +78,6 @@ impl Config {
     pub fn load(path: &Path) -> Result<Self, AppError> {
         let config: Config = toml::from_str(&fs::read_to_string(path)?)?;
         Ok(config)
-    }
-
-    /// 在指定路径创建配置样板
-    ///
-    /// # Arguments
-    ///
-    /// - `path` - 文件路径
-    ///
-    fn create_sample(path: &Path) -> Result<(), AppError> {
-        fs::File::create(path)?.write_all(sample::CONFIG.as_bytes())?;
-        Ok(())
     }
 
     /// 使用 cli 参数覆盖配置
@@ -103,7 +104,7 @@ impl Config {
                 passwords,
                 operation_for_extracted,
                 dir_for_move,
-                extract_directly: make_dir,
+                extract_directly,
                 extract_directly_single,
                 recursively,
             } => {
@@ -125,7 +126,7 @@ impl Config {
                 if let Some(v) = dir_for_move {
                     self.extract.extract_method.dir_for_move = v.clone();
                 };
-                if let Some(v) = make_dir {
+                if let Some(v) = extract_directly {
                     self.extract.extract_method.extract_directly = *v;
                 };
                 if let Some(v) = extract_directly_single {
@@ -172,42 +173,13 @@ impl Config {
 
         self
     }
-
-    /// 检查 general 配置段，若文件不存在则创建示例文件
-    pub fn check_general(&self) -> Result<(), AppError> {
-        if !self.general.log_path.exists() || self.general.log_path.is_file() {
-            fs::File::create(&self.general.log_path)?;
-            info!("使用日志文件: '{}'", self.general.log_path.display());
-        } else {
-            return Err(AppError::Config(format!(
-                "Wrong log path: '{}'",
-                self.general.log_path.display()
-            )));
-        };
-
-        if !self.general.password_path.exists() {
-            warn!(
-                "未找到密码文件，创建示例文件: '{}'",
-                self.general.password_path.display()
-            );
-            fs::File::create(&self.general.password_path)?
-                .write_all(sample::PASSWORDS.as_bytes())?;
-        } else if !self.general.password_path.is_file() {
-            return Err(AppError::Config(format!(
-                "Wrong password file path: '{}'",
-                self.general.log_path.display()
-            )));
-        };
-
-        Ok(())
-    }
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             general: GeneralConfig::default(),
-            extract: ExractConfig::default(),
+            extract: ExtractConfig::default(),
             convert: ConvertConfig::default(),
         }
     }
@@ -234,10 +206,36 @@ impl Default for GeneralConfig {
     }
 }
 
+impl GeneralConfig {
+    /// 检查 general 配置段，若配置中指定文件不存在则创建
+    pub fn check(&self) -> Result<(), AppError> {
+        if !self.log_path.exists() || self.log_path.is_file() {
+            fs::File::create(&self.log_path)?;
+            info!("使用日志文件: '{}'", self.log_path.display());
+        } else {
+            let msg = format!("日志文件路径有误: '{}'", self.log_path.display());
+            warn!("{}", msg);
+            return Err(AppError::Config(msg));
+        };
+
+        if !self.password_path.exists() {
+            warn!("未找到密码文件: '{}'", self.password_path.display());
+            info!("创建密码文件示例: '{}'", self.password_path.display());
+            PasswordFile::write_sample(&self.password_path)?;
+        } else if !self.password_path.is_file() {
+            let msg = format!("密码文件路径有误: '{}'", self.password_path.display());
+            warn!("{}", msg);
+            return Err(AppError::Config(msg));
+        };
+
+        Ok(())
+    }
+}
+
 /// # 解压设置
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
-pub struct ExractConfig {
+pub struct ExtractConfig {
     /// 7zip 路径
     pub path_for_7z: Option<PathBuf>,
     /// 待解压文件或文件夹
@@ -249,7 +247,7 @@ pub struct ExractConfig {
     /// 解压方式
     pub extract_method: ExtractMethod,
 }
-impl Default for ExractConfig {
+impl Default for ExtractConfig {
     fn default() -> Self {
         Self {
             path_for_7z: None,
@@ -258,6 +256,14 @@ impl Default for ExractConfig {
             passwords: vec![],
             extract_method: ExtractMethod::default(),
         }
+    }
+}
+
+impl ExtractConfig {
+    /// 检查 extract 配置段，若配置中指定文件不存在则创建
+    pub fn check(&self) -> Result<(), AppError> {
+        todo!();
+        Ok(())
     }
 }
 

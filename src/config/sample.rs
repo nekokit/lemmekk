@@ -74,32 +74,3 @@ export_type = "Text"
 # 导出字典路径，默认使用工具目录下的 `password.txt`
 # export_path = ''
 "#;
-
-pub const PASSWORDS: &str = r#"# 示例密码文件
-# 密码格式为：
-
-# 密码开始
-[[passwords]]
-# 密码字符串
-# 使用半角单引号包裹，密码内不能使用半角单引号
-# 使用半角双引号包裹，密码内不能使用半角双引号，并且特殊字符需要转义
-password = 'sample'
-# 使用次数
-usage_count = 0
-# 添加时间
-gmt_crate = 1701360000
-# 最后一次使用时间
-gmt_modified = 1701360000
-
-# 密码开始
-[[passwords]]
-# 密码字符串，如果密码含有半角单引号，则使用三个半角单引号包裹
-# 其他的形式可查阅 Toml 字符串形式
-password = '''i'm fine'''
-# 使用次数
-usage_count = 1
-# 添加时间
-gmt_crate = 1701360000
-# 最后一次使用时间
-gmt_modified = 1701360000
-"#;
