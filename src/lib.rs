@@ -31,8 +31,8 @@ pub const DEFAULT_PATH: LazyCell<PathLoader> = LazyCell::new(|| PathLoader::defa
 
 /// 默认正则提供器
 pub const DEFAULT_REGEX: LazyCell<RegexLoader> = LazyCell::new(|| RegexLoader {
-    pw_type_jtmdy: Regex::new(r"(.+)\t\t(\d+)").unwrap(),
-    version_7z: Regex::new(r"7-Zip.+ (\d+.\d+) :").unwrap(),
+    pw_type_jtmdy: Regex::new(r"\b(.+)\t\t(\d+)\b").unwrap(),
+    version_7z: Regex::new(r"\b7-Zip.+ (\d+.\d+) :").unwrap(),
 });
 
 /// # 路径提供器

@@ -212,7 +212,8 @@ impl PasswordFile {
     /// 成功删除的个数，不包括不存在的
     ///
     pub fn del_passwords(&mut self, list: &[String]) -> usize {
-        let indexes = self
+        // 将索引列出
+        let mut indexes = self
             .passwords
             .iter()
             .enumerate()
@@ -220,8 +221,11 @@ impl PasswordFile {
             .fold(vec![], |mut acc, (index, _)| {
                 acc.push(index);
                 acc
-            }); // 将索引列出
-                // 删除密码文件中的密码
+            });
+
+        // 由索引从大到小删除密码文件中的密码
+        indexes.sort();
+        indexes.reverse();
         indexes.iter().for_each(|i| {
             self.passwords.remove(*i);
         });
