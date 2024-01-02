@@ -1,17 +1,18 @@
 use std::{env, process};
 
 use clap::Parser;
-use lemmekk::AppError;
-use lemmekk::Application;
+use log::error;
 
+use lemmekk::Application;
 use lemmekk::CliArgs;
 
-fn main() -> Result<(), AppError> {
+fn main() {
     // 创建 App 对象并使用配置文件和执行参数覆盖
     let mut app = match Application::create(CliArgs::parse()) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("{}", e);
+            error!("{:?}", e);
+            eprintln!("{:?}", e);
             process::exit(-1);
         }
     };
@@ -19,5 +20,9 @@ fn main() -> Result<(), AppError> {
     env::set_var("RUST_LOG", app.config.general.log_level.to_string());
     env_logger::init();
     // 主程序执行
-    app.run()
+    if let Err(e) = app.run() {
+        error!("{:?}", e);
+        eprintln!("{:?}", e);
+        process::exit(-1);
+    }
 }

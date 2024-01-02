@@ -87,6 +87,10 @@ pub enum Command {
         )]
         extract_input: Vec<PathBuf>,
 
+        /// 解压选项：[开关] 是否搜索子文件夹中的文件。
+        #[arg(short, long, help = "[开关] 是否搜索子文件夹中的文件")]
+        walk_input: Option<bool>,
+
         /// 解压选项：指定输出文件夹，文件夹不存在时将会被创建。
         #[arg(
             short = 'o',
@@ -111,7 +115,7 @@ pub enum Command {
         /// - `delete` - 删除
         /// - `move` - 移动
         #[arg(
-            short,
+            short = 'j',
             long,
             value_enum,
             help = "指定解压完成后操作",

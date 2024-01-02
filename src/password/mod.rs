@@ -6,11 +6,12 @@ mod sample;
 use std::io::Write;
 use std::{fmt::Display, fs, path::Path};
 
-use chrono::{Duration, Local, Utc};
+use anyhow::Result;
+use chrono::{Local, Utc};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
-use crate::{config::PasswordConvertType, AppError, DEFAULT_REGEX};
+use crate::{config::PasswordConvertType, DEFAULT_REGEX};
 
 /// # 密码结构
 /// 提供密码的各种模型。
@@ -18,6 +19,10 @@ use crate::{config::PasswordConvertType, AppError, DEFAULT_REGEX};
 pub struct Password {
     /// 密码字符串
     pub password: String,
+
+    /// 命令行密码
+    #[serde(skip_serializing, skip_deserializing)]
+    pub pw_for_7z: String,
 
     /// 使用次数
     pub usage_count: usize,
@@ -28,19 +33,10 @@ pub struct Password {
 
     /// 修改时间、上次使用时间
     #[serde(with = "chrono::serde::ts_seconds")]
-    pub gmt_modified: chrono::DateTime<Utc>,
+    pub gmt_usage: chrono::DateTime<Utc>,
 }
 
 impl Password {
-    pub fn new(password: &str) -> Self {
-        Self {
-            password: password.to_string(),
-            usage_count: 0,
-            gmt_crate: Utc::now(),
-            gmt_modified: Utc::now(),
-        }
-    }
-
     pub fn as_str(&self) -> &str {
         &self.password
     }
@@ -49,19 +45,27 @@ impl Password {
     pub fn display(&self) -> String {
         format!(
             "'{}' [使用次数: {}, 上次使用: {}]",
-            self.to_string().bold().yellow(),
+            self.to_string().bold().green(),
             self.usage_count.to_string().bold().blue(),
-            self.gmt_modified.with_timezone(&Local).to_rfc3339().green()
+            self.gmt_usage.with_timezone(&Local).to_rfc3339().cyan()
         )
     }
 
     pub fn create(password: &str, count: usize) -> Self {
+        let pw_for_7z = password.replace("\"", "\\\"");
+        let now = Utc::now();
         Self {
             password: password.to_string(),
+            pw_for_7z,
             usage_count: count,
-            gmt_crate: Utc::now(),
-            gmt_modified: Utc::now(),
+            gmt_crate: now,
+            gmt_usage: now,
         }
+    }
+
+    pub fn used(&mut self) {
+        self.usage_count += 1;
+        self.gmt_usage = Utc::now();
     }
 }
 
@@ -72,37 +76,23 @@ impl Display for Password {
 }
 
 /// # 经过分类的密码引用
+#[derive(Debug)]
 pub struct PasswordList<'a> {
-    /// 参数传递的密码
-    pub args: Vec<&'a Password>,
-    /// 运行时使用过的密码
-    pub runtime: Vec<&'a Password>,
+    /// 运行时使用的密码
+    pub runtime: Vec<&'a mut Password>,
     /// 近期使用过的密码
-    pub frequent: Vec<&'a Password>,
+    pub frequent: Vec<&'a mut Password>,
     /// 剩余的密码
-    pub others: Vec<&'a Password>,
+    pub others: Vec<&'a mut Password>,
 }
 
 impl<'a> PasswordList<'a> {
     pub fn new() -> Self {
         Self {
-            args: vec![],
             runtime: vec![],
             frequent: vec![],
             others: vec![],
         }
-    }
-
-    pub fn from_password_file(file: &'a PasswordFile) -> Self {
-        let now = Utc::now();
-        let mut list = Self::new();
-        file.passwords
-            .iter()
-            .for_each(|item| match now - item.gmt_modified {
-                v if v <= Duration::weeks(5) => list.frequent.push(item),
-                _ => list.others.push(item),
-            });
-        list
     }
 }
 
@@ -128,20 +118,24 @@ impl Default for PasswordFile {
 }
 
 impl PasswordFile {
-    pub fn new() -> Self {
-        Self { passwords: vec![] }
-    }
-
     /// 加载密码文件
     ///
     /// # Arguments
     ///
     /// - `path` - 密码文件路径
     ///
-    pub fn load(path: &Path) -> Result<PasswordFile, AppError> {
+    pub fn load(path: &Path) -> Result<PasswordFile> {
         if !path.exists() {}
-        let passwords: PasswordFile = toml::from_str(&fs::read_to_string(path)?)?;
+        let mut passwords: PasswordFile = toml::from_str(&fs::read_to_string(path)?)?;
+        passwords.gen_pw_for_7z();
         Ok(passwords)
+    }
+
+    /// 生成命令行密码
+    fn gen_pw_for_7z(&mut self) {
+        self.passwords.iter_mut().for_each(|item| {
+            item.pw_for_7z = item.password.replace("\"", "\\\"");
+        });
     }
 
     /// 取得现有密码个数
@@ -149,18 +143,15 @@ impl PasswordFile {
         self.passwords.len()
     }
 
-    /// 取得密码字符串引用列表
-    fn get_str_list(&self) -> Vec<&str> {
-        self.passwords.iter().map(|p| p.as_str()).collect()
-    }
-
-    /// 将密码写入磁盘
+    /// 将密码按照最后使用时间降序排列并写入磁盘
     ///
     /// Arguments
     ///
     /// - `path` - 密码文件路径
     ///
-    pub fn write(&self, path: &Path) -> Result<(), AppError> {
+    pub fn sort_and_write(&mut self, path: &Path) -> Result<()> {
+        // 按照最后使用时间降序排列
+        self.passwords.sort_by(|a, b| b.gmt_usage.cmp(&a.gmt_usage));
         fs::write(
             path,
             sample::PASSWORDS.to_string() + &toml::to_string(self)?,
@@ -174,7 +165,7 @@ impl PasswordFile {
     ///
     /// - `path` - 密码文件路径
     ///
-    pub fn write_sample(path: &Path) -> Result<(), AppError> {
+    pub fn write_sample(path: &Path) -> Result<()> {
         fs::File::create(path)?.write_all(sample::PASSWORDS.as_bytes())?;
         Ok(())
     }
@@ -202,7 +193,7 @@ impl PasswordFile {
                     .iter()
                     .any(|password| &password.password == *item)
             }) // 筛选未包含的密码
-            .map(|item| Password::new(&item)) // 转为 Password 对象
+            .map(|item| Password::create(&item, 0)) // 转为 Password 对象
             .collect::<Vec<Password>>()
             .into_iter()
             .for_each(|item| self.passwords.push(item)); // 添加进密码文件
@@ -257,11 +248,7 @@ impl PasswordFile {
     /// - `path` - 导出路径
     /// - `convert_type` - 导出文件格式
     ///
-    pub fn export(
-        &self,
-        path: &Path,
-        convert_type: &PasswordConvertType,
-    ) -> Result<usize, AppError> {
+    pub fn export(&self, path: &Path, convert_type: &PasswordConvertType) -> Result<usize> {
         match convert_type {
             PasswordConvertType::Text => {
                 let write_str = self
@@ -292,11 +279,7 @@ impl PasswordFile {
     /// - `path` - 导入路径
     /// - `convert_type` - 导入文件格式
     ///
-    pub fn import(
-        &mut self,
-        path: &Path,
-        convert_type: &PasswordConvertType,
-    ) -> Result<usize, AppError> {
+    pub fn import(&mut self, path: &Path, convert_type: &PasswordConvertType) -> Result<usize> {
         match convert_type {
             PasswordConvertType::Text => {
                 let file_str = fs::read_to_string(path)?;
@@ -315,14 +298,14 @@ impl PasswordFile {
                     .collect::<Vec<&str>>();
                 verified
                     .iter()
-                    .map(|s| Password::new(s))
+                    .map(|s| Password::create(s, 0))
                     .for_each(|p| self.passwords.push(p));
                 Ok(verified.len())
             }
             PasswordConvertType::Jtmdy => {
-                let r = DEFAULT_REGEX.pw_type_jtmdy();
                 let file_str = fs::read_to_string(path)?;
-                let verified = r
+                let verified = DEFAULT_REGEX
+                    .pw_type_jtmdy
                     .captures_iter(&file_str)
                     .filter(|item| {
                         !self

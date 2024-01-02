@@ -6,16 +6,19 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
+    process,
 };
 
+use anyhow::{bail, Context, Result};
 use clap::ValueEnum;
-use log::{info, warn};
+use colored::Colorize;
+use log::{debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     app::{CliArgs, Command, PasswordProcess},
     log::LogLevel,
-    AppError, PasswordFile, DEFAULT_PATH,
+    PasswordFile, DEFAULT_PATH, DEFAULT_REGEX,
 };
 
 mod sample;
@@ -42,14 +45,11 @@ impl Config {
     ///
     /// - `path` - 文件路径
     ///
-    pub fn check_path(path: &Path) -> Result<(), AppError> {
+    pub fn check_path(path: &Path) -> Result<()> {
         if !path.exists() {
-            Self::create_sample(path)?;
+            Self::create_sample(path).context("示例配置文件写入失败")?;
         } else if !path.is_file() {
-            return Err(AppError::Config(format!(
-                "Wrong config path: '{}'",
-                path.display()
-            )));
+            bail!("配置文件路径有误: '{}'", path.display());
         }
         Ok(())
     }
@@ -60,7 +60,7 @@ impl Config {
     ///
     /// - `path` - 文件路径
     ///
-    fn create_sample(path: &Path) -> Result<(), AppError> {
+    fn create_sample(path: &Path) -> Result<()> {
         fs::File::create(path)?.write_all(sample::CONFIG.as_bytes())?;
         Ok(())
     }
@@ -75,7 +75,7 @@ impl Config {
     ///
     /// 文件中的配置
     ///
-    pub fn load(path: &Path) -> Result<Self, AppError> {
+    pub fn load(path: &Path) -> Result<Self> {
         let config: Config = toml::from_str(&fs::read_to_string(path)?)?;
         Ok(config)
     }
@@ -100,6 +100,7 @@ impl Config {
             Command::Extract {
                 path_for_7z,
                 extract_input,
+                walk_input,
                 extract_output,
                 passwords,
                 operation_for_extracted,
@@ -113,6 +114,9 @@ impl Config {
                 };
                 if extract_input.len() > 0 {
                     self.extract.extract_input = extract_input.clone();
+                };
+                if let Some(v) = walk_input {
+                    self.extract.walk_input = *v;
                 };
                 if let Some(v) = extract_output {
                     self.extract.extract_output = v.clone();
@@ -200,32 +204,41 @@ impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
             log_level: LogLevel::Info,
-            log_path: DEFAULT_PATH.log(),
-            password_path: DEFAULT_PATH.password(),
+            log_path: DEFAULT_PATH.log.clone(),
+            password_path: DEFAULT_PATH.password.clone(),
         }
     }
 }
 
 impl GeneralConfig {
     /// 检查 general 配置段，若配置中指定文件不存在则创建
-    pub fn check(&self) -> Result<(), AppError> {
+    pub fn check(&self) -> Result<()> {
         if !self.log_path.exists() || self.log_path.is_file() {
-            fs::File::create(&self.log_path)?;
+            fs::File::create(&self.log_path).context("日志文件创建失败")?;
             info!("使用日志文件: '{}'", self.log_path.display());
         } else {
-            let msg = format!("日志文件路径有误: '{}'", self.log_path.display());
+            let msg = format!(
+                "日志文件路径有误: '{}'",
+                self.log_path.display().to_string().yellow()
+            );
             warn!("{}", msg);
-            return Err(AppError::Config(msg));
+            bail!(msg);
         };
 
         if !self.password_path.exists() {
-            warn!("未找到密码文件: '{}'", self.password_path.display());
+            warn!(
+                "未找到密码文件: '{}'",
+                self.password_path.display().to_string().yellow()
+            );
             info!("创建密码文件示例: '{}'", self.password_path.display());
-            PasswordFile::write_sample(&self.password_path)?;
+            PasswordFile::write_sample(&self.password_path).context("示例密码文件创建失败")?;
         } else if !self.password_path.is_file() {
-            let msg = format!("密码文件路径有误: '{}'", self.password_path.display());
+            let msg = format!(
+                "密码文件路径有误: '{}'",
+                self.password_path.display().to_string().yellow()
+            );
             warn!("{}", msg);
-            return Err(AppError::Config(msg));
+            bail!(msg);
         };
 
         Ok(())
@@ -240,10 +253,14 @@ pub struct ExtractConfig {
     pub path_for_7z: Option<PathBuf>,
     /// 待解压文件或文件夹
     pub extract_input: Vec<PathBuf>,
+    /// 搜索子文件夹
+    pub walk_input: bool,
     /// 解压目的文件夹
     pub extract_output: PathBuf,
     /// 指定密码
     pub passwords: Vec<String>,
+    /// 常用密码存留时间
+    pub password_hot_boundary: u32,
     /// 解压方式
     pub extract_method: ExtractMethod,
 }
@@ -252,8 +269,10 @@ impl Default for ExtractConfig {
         Self {
             path_for_7z: None,
             extract_input: vec![],
+            walk_input: false,
             extract_output: PathBuf::new(),
             passwords: vec![],
+            password_hot_boundary: 30,
             extract_method: ExtractMethod::default(),
         }
     }
@@ -261,9 +280,66 @@ impl Default for ExtractConfig {
 
 impl ExtractConfig {
     /// 检查 extract 配置段，若配置中指定文件不存在则创建
-    pub fn check(&self) -> Result<(), AppError> {
-        todo!();
+    pub fn check(&self) -> Result<()> {
+        // 检查 7z
+        let cmd_7z: String;
+        if let Some(path) = &self.path_for_7z {
+            cmd_7z = path.display().to_string();
+        } else {
+            cmd_7z = "7z".to_string();
+        }
+        debug!("7z 调用: {}", cmd_7z);
+        let version = Self::check_7z(&cmd_7z).context("7zip 执行文件检查失败")?;
+        info!("7z 版本: {}", version);
+
+        // 检查解压目标文件夹
+        if !self.extract_output.exists() {
+            fs::create_dir(&self.extract_output).context("解压目标文件夹创建失败")?;
+        } else if !self.extract_output.is_dir() {
+            let msg = format!(
+                "解压文件夹有误: '{}'",
+                self.extract_output.display().to_string().red()
+            );
+            error!("{}", msg);
+            bail!(msg);
+        }
+
+        // 解压后移动时检查移动文件夹
+        if let OperationForExtracted::Move = self.extract_method.operation_for_extracted {
+            if !self.extract_method.dir_for_move.exists() {
+                fs::create_dir(&self.extract_method.dir_for_move)
+                    .context("解压后移动文件夹创建失败")?;
+            } else if !self.extract_method.dir_for_move.is_dir() {
+                let msg = format!(
+                    "解压后移动文件夹有误: '{}'",
+                    self.extract_output.display().to_string().red()
+                );
+                error!("{}", msg);
+                bail!(msg);
+            }
+        }
+
         Ok(())
+    }
+
+    fn check_7z(path_str: &str) -> Result<String> {
+        let output = process::Command::new(path_str)
+            .arg("--help")
+            .output()
+            .context(format!("7z 路径有误: {}", path_str.to_string().red()))?;
+
+        let version = match DEFAULT_REGEX
+            .version_7z
+            .captures(&String::from_utf8(output.stdout)?)
+        {
+            None => {
+                let msg = format!("未知的 7z 版本: {}", path_str.to_string().red());
+                error!("{}", msg);
+                bail!(msg);
+            }
+            Some(v) => v[1].to_string(),
+        };
+        Ok(version)
     }
 }
 
@@ -287,8 +363,8 @@ impl Default for ExtractMethod {
         Self {
             operation_for_extracted: OperationForExtracted::DoNothing,
             dir_for_move: PathBuf::new(),
-            extract_directly: true,
-            extract_directly_single: true,
+            extract_directly: false,
+            extract_directly_single: false,
             recursively: false,
         }
     }
@@ -311,9 +387,9 @@ impl Default for ConvertConfig {
     fn default() -> Self {
         Self {
             import_type: PasswordConvertType::Text,
-            import_path: DEFAULT_PATH.exchange(),
+            import_path: DEFAULT_PATH.convert.clone(),
             export_type: PasswordConvertType::Text,
-            export_path: DEFAULT_PATH.exchange(),
+            export_path: DEFAULT_PATH.convert.clone(),
         }
     }
 }
