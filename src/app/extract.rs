@@ -1,5 +1,6 @@
 //! # 解压模块
 
+use clap::builder::OsStr;
 use log::{debug, info, trace, warn};
 use std::fs::File;
 use std::io::{self, BufWriter, Read, Write};
@@ -74,8 +75,8 @@ impl<'a> ExtractProtocol<'a> {
     ///
     /// 转换成功的数量
     ///
-    pub fn load_jobs(&mut self, paths: &[PathBuf], walkdir: bool) -> Result<usize> {
-        let path_list = Self::collect_file(paths, walkdir);
+    pub fn load_jobs(&mut self, paths: &[PathBuf], config: &ExtractConfig) -> Result<usize> {
+        let path_list = Self::collect_file(paths, config.walk_input, &config.excluded_extension);
         self.pending_jobs = path_list
             .iter()
             .map(Self::convert_to_job) // 转为解压任务
@@ -155,7 +156,11 @@ impl<'a> ExtractProtocol<'a> {
     ///
     /// 所有文件列表
     ///
-    fn collect_file(paths: &[PathBuf], walkdir: bool) -> Vec<PathBuf> {
+    fn collect_file(
+        paths: &[PathBuf],
+        walkdir: bool,
+        excluded_extension: &[String],
+    ) -> Vec<PathBuf> {
         let mut list = vec![];
         paths.iter().for_each(|path| {
             if path.is_file() {
@@ -170,7 +175,17 @@ impl<'a> ExtractProtocol<'a> {
                     .for_each(|item| {
                         let path = item.path().to_path_buf();
                         trace!("找到文件: '{}'", path.display());
-                        list.push(path)
+                        if !excluded_extension.contains(
+                            &path
+                                .extension()
+                                .unwrap_or(OsStr::from("").as_os_str())
+                                .to_string_lossy()
+                                .to_string(),
+                        ) {
+                            list.push(path);
+                        } else {
+                            info!("已通过扩展名过滤: '{}'", path.display())
+                        }
                     });
             } else if path.is_dir() && !walkdir {
                 // 路径为文件夹且不遍历子文件夹
@@ -181,7 +196,18 @@ impl<'a> ExtractProtocol<'a> {
                     .for_each(|item| {
                         let path = item.path().to_path_buf();
                         trace!("找到文件: '{}'", path.display());
-                        list.push(path)
+
+                        if !excluded_extension.contains(
+                            &path
+                                .extension()
+                                .unwrap_or(OsStr::from("").as_os_str())
+                                .to_string_lossy()
+                                .to_string(),
+                        ) {
+                            list.push(path);
+                        } else {
+                            info!("已通过扩展名过滤: '{}'", path.display())
+                        }
                     });
             } else {
                 // 错误路径丢弃

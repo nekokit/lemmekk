@@ -77,10 +77,12 @@ impl<'a> Application<'a> {
                 path_for_7z: _,
                 extract_input: _,
                 walk_input: _,
+                excluded_extension: _,
                 extract_output: _,
                 passwords: _,
                 operation_for_extracted: _,
                 dir_for_move: _,
+                recogniz_steganography: _,
                 extract_directly: _,
                 extract_directly_single: _,
                 recursively: _,
@@ -112,10 +114,9 @@ impl<'a> Application<'a> {
                     .load_passwords(&mut self.passwords_file, &self.config.extract);
 
                 // 加载待解压任务
-                let job_count = self.extract.load_jobs(
-                    &self.config.extract.extract_input,
-                    self.config.extract.walk_input,
-                )?;
+                let job_count = self
+                    .extract
+                    .load_jobs(&self.config.extract.extract_input, &self.config.extract)?;
                 info!("共加载 {} 个解压任务", job_count.to_string().green());
             }
             Command::Password { command, add, del } => {

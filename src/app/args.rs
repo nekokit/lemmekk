@@ -91,6 +91,10 @@ pub enum Command {
         #[arg(short, long, help = "[开关] 是否搜索子文件夹中的文件")]
         walk_input: Option<bool>,
 
+        /// 解压选项：需排除的文件扩展名。
+        #[arg(short, long, help = "需排除的文件扩展名")]
+        excluded_extension: Vec<String>,
+
         /// 解压选项：指定输出文件夹，文件夹不存在时将会被创建。
         #[arg(
             short = 'o',
@@ -102,7 +106,7 @@ pub enum Command {
 
         /// 解压选项：指定使用的密码，可多次指定，这些密码将会存储到密码文件中。
         #[arg(
-            short,
+            short = 'p',
             long,
             help = "指定使用的密码",
             help = "指定使用的密码，可多次指定，这些密码将会存储到密码文件中。"
@@ -125,12 +129,16 @@ pub enum Command {
 
         /// 解压选项：当解压完成后的操作指定为 `move` 时，将压缩文件移动到的目录。
         #[arg(
-            short,
+            short = 'd',
             long,
             help = "指定将压缩文件移动到的目录",
             long_help = "当解压完成后的操作指定为 `move` 时，将压缩文件移动到的目录。"
         )]
         dir_for_move: Option<PathBuf>,
+
+        /// 解压选项：[开关] 是否不为每个压缩包创建目录，直接解压到目标文件夹。
+        #[arg(long, help = "[开关] 是否识别图种隐写文件")]
+        recogniz_steganography: Option<bool>,
 
         /// 解压选项：[开关] 是否不为每个压缩包创建目录，直接解压到目标文件夹。
         #[arg(long, help = "[开关] 是否不为每个压缩包创建目录，直接解压到目标文件夹")]
@@ -144,7 +152,7 @@ pub enum Command {
         extract_directly_single: Option<bool>,
 
         /// 解压选项：[开关] 是否递归解压压缩文件内的压缩文件。
-        #[arg(short, long, help = "[开关] 是否递归解压压缩文件内的压缩文件")]
+        #[arg(short = 'r', long, help = "[开关] 是否递归解压压缩文件内的压缩文件")]
         recursively: Option<bool>,
     },
 

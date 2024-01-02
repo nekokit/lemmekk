@@ -6,7 +6,7 @@ use std::{
     fs,
     io::Write,
     path::{Path, PathBuf},
-    process,
+    process, vec,
 };
 
 use anyhow::{bail, Context, Result};
@@ -101,10 +101,12 @@ impl Config {
                 path_for_7z,
                 extract_input,
                 walk_input,
+                excluded_extension,
                 extract_output,
                 passwords,
                 operation_for_extracted,
                 dir_for_move,
+                recogniz_steganography,
                 extract_directly,
                 extract_directly_single,
                 recursively,
@@ -118,6 +120,9 @@ impl Config {
                 if let Some(v) = walk_input {
                     self.extract.walk_input = *v;
                 };
+                if excluded_extension.len() > 0 {
+                    self.extract.excluded_extension = excluded_extension.clone();
+                };
                 if let Some(v) = extract_output {
                     self.extract.extract_output = v.clone();
                 };
@@ -129,6 +134,9 @@ impl Config {
                 };
                 if let Some(v) = dir_for_move {
                     self.extract.extract_method.dir_for_move = v.clone();
+                };
+                if let Some(v) = recogniz_steganography {
+                    self.extract.extract_method.recogniz_steganography = *v;
                 };
                 if let Some(v) = extract_directly {
                     self.extract.extract_method.extract_directly = *v;
@@ -255,6 +263,8 @@ pub struct ExtractConfig {
     pub extract_input: Vec<PathBuf>,
     /// 搜索子文件夹
     pub walk_input: bool,
+    /// 搜索子文件夹
+    pub excluded_extension: Vec<String>,
     /// 解压目的文件夹
     pub extract_output: PathBuf,
     /// 指定密码
@@ -270,6 +280,7 @@ impl Default for ExtractConfig {
             path_for_7z: None,
             extract_input: vec![],
             walk_input: false,
+            excluded_extension: vec![],
             extract_output: PathBuf::new(),
             passwords: vec![],
             password_hot_boundary: 30,
@@ -351,6 +362,8 @@ pub struct ExtractMethod {
     pub operation_for_extracted: OperationForExtracted,
     /// 移动目的文件夹
     pub dir_for_move: PathBuf,
+    /// 移动目的文件夹
+    pub recogniz_steganography: bool,
     /// 是否不为每个压缩包创建目录，直接解压到目标文件夹
     pub extract_directly: bool,
     /// 在压缩包内只有单文件单文件夹的情况下，是否不创建文件夹直接解压
@@ -363,6 +376,7 @@ impl Default for ExtractMethod {
         Self {
             operation_for_extracted: OperationForExtracted::DoNothing,
             dir_for_move: PathBuf::new(),
+            recogniz_steganography: false,
             extract_directly: false,
             extract_directly_single: false,
             recursively: false,

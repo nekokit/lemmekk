@@ -32,6 +32,10 @@ extract_input = []
 # 是否搜索子文件夹中的文件，默认为 false
 # walk_input = false
 
+# 需排除的文件扩展名
+# 扩展名半角单引号包裹，半角逗号+空格或换行分隔，例: `['{扩展名}', '{扩展名}']`
+excluded_extension = []
+
 # 解压目标文件夹
 extract_output = ''
 
@@ -57,10 +61,16 @@ operation_for_extracted = "DoNothing"
 # 解压后选择移动时，将压缩文件移动到的目录。
 dir_for_move = ''
 
-# 是否不为每个压缩包创建目录，直接解压到目标文件夹，默认为 false
+
+# 是否识别图种隐写文件，默认为 false
+# recogniz_steganography = false
+
+# 是否直接解压到目标文件夹，不为每个压缩包创建目录，默认为 false
 # extract_directly = false
+
 # 在压缩包内只有单文件单文件夹的情况下，是否不创建文件夹直接解压，默认为 false
 # extract_directly_single = false
+
 # 是否递归解压压缩文件内的压缩文件，默认为 false
 # recursively = false
 
