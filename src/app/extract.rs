@@ -7,35 +7,20 @@ use std::io::{self, BufWriter, Read, Write};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{Duration, Utc};
 use colored::Colorize;
 use walkdir::WalkDir;
 
 use crate::config::ExtractConfig;
-use crate::{filepattern, CompressType, ImageType, PasswordFile, PasswordList};
+use crate::{filepattern, CompressType, ImageType, PasswordManager};
 
 /// # 解压流程
-pub struct ExtractProtocol<'a> {
-    /// 密码列表
-    pub passwords: PasswordList<'a>,
+#[derive(Default)]
+pub struct Extractor {
     /// 待解压列表
     pub pending_jobs: Vec<ExtractJob>,
 }
 
-impl<'a> Default for ExtractProtocol<'a> {
-    fn default() -> Self {
-        Self {
-            passwords: PasswordList {
-                runtime: vec![],
-                frequent: vec![],
-                others: vec![],
-            },
-            pending_jobs: vec![],
-        }
-    }
-}
-
-impl<'a> ExtractProtocol<'a> {
+impl Extractor {
     /// 根据指定密码、密码热边界分类加载密码
     ///
     /// # Arguments
@@ -43,40 +28,45 @@ impl<'a> ExtractProtocol<'a> {
     /// - 'password_file' - 读取的密码文件
     /// - 'extract_config' - 解压配置
     ///
-    pub fn load_passwords(
+    pub fn run<'a>(
         &mut self,
-        password_file: &'a mut PasswordFile,
-        extract_config: &ExtractConfig,
-    ) {
-        let hot_boundary = Utc::now() - Duration::days(extract_config.password_hot_boundary.into());
-        password_file.passwords.iter_mut().for_each(|p| {
-            if extract_config.passwords.contains(&p.password) {
-                // 优先密码储存于运行级别
-                self.passwords.runtime.push(p);
-            } else if p.gmt_usage > hot_boundary {
-                // 使用时间大于热边界的储存于频繁级别
-                self.passwords.frequent.push(p);
-            } else {
-                // 其他的储存于低优先级
-                self.passwords.others.push(p);
-            }
-        });
-        debug!("使用密码: {:?}", self.passwords);
+        password_manager: &'a mut PasswordManager<'a>,
+        config: &ExtractConfig,
+    ) -> Result<()> {
+        // 添加指定密码并写入文件
+        let count = password_manager.add_privilege(&config.passwords);
+        if count > 0 {
+            info!(
+                "已在密码文件中添加指定密码 {} 个",
+                count.to_string().green()
+            );
+            password_manager.write()?;
+        };
+        // 密码分类
+        password_manager.classify(config.password_hot_boundary);
+
+        // 加载待解压任务
+        let job_count = self.load_jobs(config)?;
+        info!("共加载 {} 个解压任务", job_count.to_string().green());
+        Ok(())
     }
 
     /// 从文件列表尝试加载解压任务
     ///
     /// # Arguments
     ///
-    /// - 'paths' - 路径列表
-    /// - 'walkdir' - 是否解压子文件夹中的文件
+    /// - 'config' - 配置
     ///
     /// # Returns
     ///
     /// 转换成功的数量
     ///
-    pub fn load_jobs(&mut self, paths: &[PathBuf], config: &ExtractConfig) -> Result<usize> {
-        let path_list = Self::collect_file(paths, config.walk_input, &config.excluded_extension);
+    pub fn load_jobs(&mut self, config: &ExtractConfig) -> Result<usize> {
+        let path_list = Self::collect_file(
+            &config.extract_input,
+            config.walk_input,
+            &config.excluded_extension,
+        );
         self.pending_jobs = path_list
             .iter()
             .map(Self::convert_to_job) // 转为解压任务

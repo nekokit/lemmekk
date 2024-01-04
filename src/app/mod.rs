@@ -1,11 +1,10 @@
 //! # 应用程序
-use std::fs;
 
 use anyhow::{Context, Result};
 use colored::Colorize;
 use log::{debug, info};
 
-use crate::{config::Config, PasswordFile, DEFAULT_PATH};
+use crate::{config::Config, PasswordManager, DEFAULT_PATH};
 
 mod args;
 mod extract;
@@ -13,7 +12,7 @@ mod extract;
 pub use args::CliArgs;
 pub use args::Command;
 pub use args::PasswordProcess;
-pub use extract::ExtractProtocol;
+pub use extract::Extractor;
 
 /// # 应用程序对象
 pub struct Application<'a> {
@@ -22,9 +21,9 @@ pub struct Application<'a> {
     /// 执行的配置
     pub config: Config,
     /// 解压流程
-    pub extract: ExtractProtocol<'a>,
-    /// 密码文件
-    passwords_file: PasswordFile,
+    pub extract: Extractor,
+    /// 密码模块
+    pub password: PasswordManager<'a>,
 }
 
 impl<'a> Application<'a> {
@@ -43,16 +42,17 @@ impl<'a> Application<'a> {
             Some(p) => p.clone(),
             None => DEFAULT_PATH.config.clone(),
         };
-        Config::check_path(&path).context("配置文件路径检查失败")?;
         let config = Config::load(&path)
             .context("配置文件加载失败")?
             .overlay(&args);
+        let password = PasswordManager::load(&config.general.password_path)?;
+        let extract = Extractor::default();
 
         Ok(Self {
             args,
             config,
-            extract: ExtractProtocol::default(),
-            passwords_file: PasswordFile::default(),
+            extract,
+            password,
         })
     }
 
@@ -65,11 +65,11 @@ impl<'a> Application<'a> {
             .general
             .check()
             .context("配置文件 [general] 检查失败")?;
-        self.passwords_file =
-            PasswordFile::load(&self.config.general.password_path).context("密码文件读取失败")?;
+        self.password = PasswordManager::load(&self.config.general.password_path)
+            .context("密码文件加载失败")?;
         info!(
             "已读取密码 {} 个",
-            self.passwords_file.count().to_string().bold().green()
+            self.password.count().to_string().bold().green()
         );
 
         match &self.args.command {
@@ -88,112 +88,15 @@ impl<'a> Application<'a> {
                 recursively: _,
             } => {
                 // 解压操作
-
-                // 添加指定密码并写入文件
-                if self.config.extract.passwords.len() > 0 {
-                    let count = self
-                        .passwords_file
-                        .add_passwords(&self.config.extract.passwords);
-                    self.passwords_file
-                        .sort_and_write(&self.config.general.password_path)
-                        .context("密码文件写入失败")?;
-                    info!(
-                        "已添加指定的密码，共 {} 个",
-                        count.to_string().bold().green()
-                    );
-                }
-
-                // 检查配置
                 self.config
                     .extract
                     .check()
                     .context("配置文件 [extract] 检查失败")?;
-
-                // 加载密码
-                self.extract
-                    .load_passwords(&mut self.passwords_file, &self.config.extract);
-
-                // 加载待解压任务
-                let job_count = self
-                    .extract
-                    .load_jobs(&self.config.extract.extract_input, &self.config.extract)?;
-                info!("共加载 {} 个解压任务", job_count.to_string().green());
+                self.extract.run(&mut self.password, &self.config.extract)?;
             }
             Command::Password { command, add, del } => {
                 // 密码操作
-                if let Some(command) = command {
-                    match command {
-                        PasswordProcess::List => {
-                            // 列出密码
-                            println!("{}", self.passwords_file.display())
-                        }
-                        PasswordProcess::Export {
-                            export_type: _,
-                            export_path: _,
-                        } => {
-                            // 导出密码
-                            let password_type = &self.config.convert.export_type;
-                            let path = &self.config.convert.export_path;
-                            if !path.exists() {
-                                fs::File::create(&path)
-                                    .context(format!("导出文件创建失败: '{}'", &path.display()))?;
-                            }
-
-                            info!(
-                                "导出密码[{}]: {}",
-                                password_type.to_string().blue(),
-                                path.display()
-                            );
-                            let count = self
-                                .passwords_file
-                                .export(path, password_type)
-                                .context("密码导出失败")?;
-                            let msg = format!("已导出 {} 个密码", count.to_string().bold().green());
-                            println!("{}", msg);
-                            info!("{}", msg)
-                        }
-                        PasswordProcess::Import {
-                            import_type,
-                            import_path,
-                        } => {
-                            // 导入密码
-                            if let Some(t) = import_type {
-                                self.config.convert.import_type = t.clone();
-                            }
-                            if let Some(p) = import_path {
-                                self.config.convert.import_path = p.clone();
-                            }
-                            let p = &self.config.convert.import_path;
-                            let t = &self.config.convert.import_type;
-                            info!("导入密码[{}]: {}", t.to_string().blue(), p.display());
-                            let count = self.passwords_file.import(p, t).context("密码导入失败")?;
-                            self.passwords_file
-                                .sort_and_write(&self.config.general.password_path)
-                                .context("密码文件写入失败")?;
-                            let msg = format!("已导入 {} 个密码", count.to_string().bold().green());
-                            println!("{}", msg);
-                            info!("{}", msg);
-                        }
-                    }
-                } else {
-                    // 若未指定密码动作时
-                    if add.len() > 0 {
-                        let count = self.passwords_file.add_passwords(add);
-                        let msg = format!("增加 {} 个密码", count.to_string().bold().green());
-                        println!("{}", msg);
-                        info!("{}", msg);
-                    };
-                    if del.len() > 0 {
-                        let count = self.passwords_file.del_passwords(del);
-                        let msg = format!("删除 {} 个密码", count.to_string().bold().green());
-                        println!("{}", msg);
-                        info!("{}", msg);
-                    };
-                    self.passwords_file
-                        .sort_and_write(&self.config.general.password_path)
-                        .context("密码文件写入失败")?;
-                    info!("已写入密码文件");
-                }
+                self.password.run(command, add, del, &self.config.convert)?;
             }
         }
         Ok(())

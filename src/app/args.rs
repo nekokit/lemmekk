@@ -189,7 +189,7 @@ pub enum Command {
 #[derive(Debug, Subcommand)]
 pub enum PasswordProcess {
     /// # 列出密码
-    #[command(about = "列出")]
+    #[command(about = "列出密码")]
     List,
 
     /// # 导出密码

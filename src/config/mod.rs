@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     app::{CliArgs, Command, PasswordProcess},
     log::LogLevel,
-    PasswordFile, DEFAULT_PATH, DEFAULT_REGEX,
+    PasswordManager, DEFAULT_PATH, DEFAULT_REGEX,
 };
 
 mod sample;
@@ -39,13 +39,29 @@ pub struct Config {
 }
 
 impl Config {
+    /// 从文件载入配置文件
+    ///
+    /// # Arguments
+    ///
+    /// - `path` - 文件路径
+    ///
+    /// # Returns
+    ///
+    /// 文件中的配置
+    ///
+    pub fn load(path: &Path) -> Result<Self> {
+        Self::check_path(path)?;
+        let config: Config = toml::from_str(&fs::read_to_string(path)?)?;
+        Ok(config)
+    }
+
     /// 检查配置文件路径，若文件不存在则创建示例配置文件
     ///
     /// # Arguments
     ///
     /// - `path` - 文件路径
     ///
-    pub fn check_path(path: &Path) -> Result<()> {
+    fn check_path(path: &Path) -> Result<()> {
         if !path.exists() {
             Self::create_sample(path).context("示例配置文件写入失败")?;
         } else if !path.is_file() {
@@ -63,21 +79,6 @@ impl Config {
     fn create_sample(path: &Path) -> Result<()> {
         fs::File::create(path)?.write_all(sample::CONFIG.as_bytes())?;
         Ok(())
-    }
-
-    /// 从文件载入配置文件
-    ///
-    /// # Arguments
-    ///
-    /// - `path` - 文件路径
-    ///
-    /// # Returns
-    ///
-    /// 文件中的配置
-    ///
-    pub fn load(path: &Path) -> Result<Self> {
-        let config: Config = toml::from_str(&fs::read_to_string(path)?)?;
-        Ok(config)
     }
 
     /// 使用 cli 参数覆盖配置
@@ -212,8 +213,8 @@ impl Default for GeneralConfig {
     fn default() -> Self {
         Self {
             log_level: LogLevel::Info,
-            log_path: DEFAULT_PATH.log.clone(),
-            password_path: DEFAULT_PATH.password.clone(),
+            log_path: DEFAULT_PATH.log.to_path_buf(),
+            password_path: DEFAULT_PATH.password.to_path_buf(),
         }
     }
 }
@@ -221,17 +222,8 @@ impl Default for GeneralConfig {
 impl GeneralConfig {
     /// 检查 general 配置段，若配置中指定文件不存在则创建
     pub fn check(&self) -> Result<()> {
-        if !self.log_path.exists() || self.log_path.is_file() {
-            fs::File::create(&self.log_path).context("日志文件创建失败")?;
-            info!("使用日志文件: '{}'", self.log_path.display());
-        } else {
-            let msg = format!(
-                "日志文件路径有误: '{}'",
-                self.log_path.display().to_string().yellow()
-            );
-            warn!("{}", msg);
-            bail!(msg);
-        };
+        fs::File::create(&self.log_path).context("日志文件创建失败")?;
+        info!("使用日志文件: '{}'", self.log_path.display());
 
         if !self.password_path.exists() {
             warn!(
@@ -239,8 +231,8 @@ impl GeneralConfig {
                 self.password_path.display().to_string().yellow()
             );
             info!("创建密码文件示例: '{}'", self.password_path.display());
-            PasswordFile::write_sample(&self.password_path).context("示例密码文件创建失败")?;
-        } else if !self.password_path.is_file() {
+            PasswordManager::write_sample(&self.password_path).context("示例密码文件创建失败")?;
+        } else if self.password_path.is_dir() {
             let msg = format!(
                 "密码文件路径有误: '{}'",
                 self.password_path.display().to_string().yellow()
@@ -270,7 +262,7 @@ pub struct ExtractConfig {
     /// 指定密码
     pub passwords: Vec<String>,
     /// 常用密码存留时间
-    pub password_hot_boundary: u32,
+    pub password_hot_boundary: i64,
     /// 解压方式
     pub extract_method: ExtractMethod,
 }
@@ -299,7 +291,7 @@ impl ExtractConfig {
         } else {
             cmd_7z = "7z".to_string();
         }
-        debug!("7z 调用: {}", cmd_7z);
+        debug!("7z 调用命令: {}", cmd_7z);
         let version = Self::check_7z(&cmd_7z).context("7zip 执行文件检查失败")?;
         info!("7z 版本: {}", version);
 
@@ -337,7 +329,7 @@ impl ExtractConfig {
         let output = process::Command::new(path_str)
             .arg("--help")
             .output()
-            .context(format!("7z 路径有误: {}", path_str.to_string().red()))?;
+            .context(format!("7z 命令有误: {}", path_str.to_string().red()))?;
 
         let version = match DEFAULT_REGEX
             .version_7z

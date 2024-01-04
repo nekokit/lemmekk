@@ -8,7 +8,6 @@ use std::{cell::LazyCell, env, path::PathBuf};
 
 mod app;
 mod config;
-// mod error;
 mod log;
 mod password;
 
@@ -20,8 +19,7 @@ pub use filepattern::ImageType;
 pub use filepattern::COMPRESSED_FEATURE;
 pub use filepattern::IMAGE_FEATURE;
 pub use password::Password;
-pub use password::PasswordFile;
-pub use password::PasswordList;
+pub use password::PasswordManager;
 
 pub mod filepattern;
 pub mod utils;
