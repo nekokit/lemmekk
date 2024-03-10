@@ -1,23 +1,21 @@
 //! # 程序配置模块
 
 use std::{
-    fmt::Display,
     fs::{self},
     io::Write,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
-use clap::ValueEnum;
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::{CliArgs, MainCommand, TokenProcess};
+use crate::{CliArgs, MainCommand, TokenFilePattern, TokenListStyle, TokenProcess};
 
 mod provider;
 mod sample;
 
-pub use provider::DEFAULT_PATH;
+pub use provider::{DEFAULT_PATH, DEFAULT_REGEX};
 
 /// # 配置
 /// 包括通用、解压和转换配置
@@ -172,46 +170,6 @@ impl Default for TokenConfig {
             import_file: DEFAULT_PATH.token_convert.to_path_buf(),
             export_pattern: TokenFilePattern::Plain,
             export_file: DEFAULT_PATH.token_convert.to_path_buf(),
-        }
-    }
-}
-
-/// # 密钥转换模式
-#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum TokenFilePattern {
-    /// 文本模式，密钥一行一个：`${密钥}`
-    #[value(help = "文本模式")]
-    Plain,
-
-    /// 解 TMD 压模式，密钥一行一个：`${密钥}\t\t${使用次数}` 。
-    #[value(help = "解TMD压模式")]
-    Jtmdy,
-}
-impl Display for TokenFilePattern {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TokenFilePattern::Plain => write!(f, "Plain"),
-            TokenFilePattern::Jtmdy => write!(f, "Jtmdy"),
-        }
-    }
-}
-
-/// # 密钥列出模式
-#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum TokenListStyle {
-    /// 文本模式，密钥一行一个：`${密钥}`
-    #[value(help = "文本模式")]
-    Plain,
-
-    /// 详细信息模式，密钥一行一个：`[${添加时间} | ${最近使用时间} | ${使用次数}] ${密钥}` 。
-    #[value(help = "详细信息模式")]
-    Detail,
-}
-impl Display for TokenListStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TokenListStyle::Plain => write!(f, "Plain"),
-            TokenListStyle::Detail => write!(f, "Detail"),
         }
     }
 }

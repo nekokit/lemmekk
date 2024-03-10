@@ -5,6 +5,7 @@ use std::env;
 use std::path::PathBuf;
 
 use anyhow::Context;
+use regex::Regex;
 
 /// 默认路径提供器
 #[derive(Debug)]
@@ -67,3 +68,19 @@ fn get_data_dir() -> PathBuf {
 
 /// 默认路径提供器
 pub const DEFAULT_PATH: LazyCell<DefaultPath> = LazyCell::new(|| DefaultPath::default());
+
+/// 默认正则提供器
+#[derive(Debug)]
+pub struct DefaultRegex {
+    pub token_file_pattern_jtmdy: Regex,
+}
+impl Default for DefaultRegex {
+    fn default() -> Self {
+        Self {
+            token_file_pattern_jtmdy: Regex::new(r"\b(?<token>.+)\t\t(?<count>\d+)\b").unwrap(),
+        }
+    }
+}
+
+/// 默认正则提供器
+pub const DEFAULT_REGEX: LazyCell<DefaultRegex> = LazyCell::new(|| DefaultRegex::default());

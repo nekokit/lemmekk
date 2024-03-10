@@ -78,13 +78,13 @@ impl Cli {
                     if delete.len() > 0 {
                         let delete_count = self.token_manager.delete_tokens(delete);
                         info!("删除密钥：{:?} 共删除 {} 个", delete, delete_count);
-                        println!("删除密码 {} 个", delete_count);
+                        println!("删除密钥 {} 个", delete_count);
                         flag_is_updated = true;
                     }
                     if add.len() > 0 {
                         let add_count = self.token_manager.add_tokens(add);
                         info!("添加密钥：{:?} 共添加 {} 个", add, add_count);
-                        println!("添加密码 {} 个", add_count);
+                        println!("添加密钥 {} 个", add_count);
                         flag_is_updated = true;
                     }
                     if flag_is_updated {
@@ -104,13 +104,30 @@ impl Cli {
                 Some(TokenProcess::Export {
                     pattern: _,
                     file: _,
-                }) => {}
+                }) => {
+                    let path = &self.config.token.export_file;
+                    let count = self
+                        .token_manager
+                        .export_token(path, &self.config.token.export_pattern)?;
+
+                    info!("导出密钥文件：{} 共导出 {} 个密钥", path.display(), count);
+                    println!("导出密钥 {} 个", count);
+                }
 
                 // 导入密钥
                 Some(TokenProcess::Import {
                     pattern: _,
                     file: _,
-                }) => {}
+                }) => {
+                    let path = &self.config.token.import_file;
+                    let count = self
+                        .token_manager
+                        .import_token(path, &self.config.token.import_pattern)?;
+                    self.token_manager.write()?;
+
+                    info!("导入密钥文件：{} 共导入 {} 个密钥", path.display(), count);
+                    println!("导入密钥 {} 个", count);
+                }
             },
         }
         Ok(())

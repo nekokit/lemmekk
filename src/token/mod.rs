@@ -5,6 +5,7 @@
 use std::fmt::Display;
 
 use chrono::{Local, Utc};
+use clap::ValueEnum;
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
@@ -114,5 +115,45 @@ impl Token {
     /// 判断是否特权密钥
     pub fn is_priviliege(&self) -> bool {
         self.priviliege
+    }
+}
+
+/// # 密钥转换模式
+#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
+pub enum TokenFilePattern {
+    /// 文本模式，密钥一行一个：`${密钥}`
+    #[value(help = "文本模式")]
+    Plain,
+
+    /// 解 TMD 压模式，密钥一行一个：`${密钥}\t\t${使用次数}` 。
+    #[value(help = "解TMD压模式")]
+    Jtmdy,
+}
+impl Display for TokenFilePattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenFilePattern::Plain => write!(f, "Plain"),
+            TokenFilePattern::Jtmdy => write!(f, "Jtmdy"),
+        }
+    }
+}
+
+/// # 密钥列出模式
+#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
+pub enum TokenListStyle {
+    /// 文本模式，密钥一行一个：`${密钥}`
+    #[value(help = "文本模式")]
+    Plain,
+
+    /// 详细信息模式，密钥一行一个：`[${添加时间} | ${最近使用时间} | ${使用次数}] ${密钥}` 。
+    #[value(help = "详细信息模式")]
+    Detail,
+}
+impl Display for TokenListStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenListStyle::Plain => write!(f, "Plain"),
+            TokenListStyle::Detail => write!(f, "Detail"),
+        }
     }
 }

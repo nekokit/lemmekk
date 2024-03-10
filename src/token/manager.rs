@@ -2,7 +2,7 @@
 //!
 //! 提供密钥管理器，用于操作密钥的读取、存储、管理、排序。
 
-use log::info;
+use log::{error, info};
 use std::{
     collections::HashMap,
     fs::{self, File},
@@ -10,13 +10,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use chrono::{Duration, Utc};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 use super::{sample, Token};
-use crate::TokenListStyle;
+use crate::{TokenFilePattern, TokenListStyle, DEFAULT_REGEX};
 
 /// # 密钥管理器
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -154,6 +154,74 @@ impl TokenManager {
         let add_count = add_tokens.len();
         self.tokens.append(&mut add_tokens);
         add_count
+    }
+
+    /// 导出密钥
+    ///
+    /// # Arguments
+    ///
+    /// - 'path' - 导出路径
+    /// - 'pattern' - 导出模式
+    pub fn export_token(&self, path: &Path, pattern: &TokenFilePattern) -> Result<usize> {
+        let export_str = match pattern {
+            TokenFilePattern::Plain => self
+                .tokens
+                .iter()
+                .map(|item| item.to_string())
+                .collect::<Vec<String>>()
+                .join("\n"),
+            TokenFilePattern::Jtmdy => self
+                .tokens
+                .iter()
+                .map(|item| format!("{}\t\t{}", item, item.usage_count))
+                .collect::<Vec<String>>()
+                .join("\n"),
+        };
+        fs::write(path, export_str)?;
+        Ok(self.count())
+    }
+
+    /// 导入密钥
+    ///
+    /// # Arguments
+    ///
+    /// - 'path' - 导入路径
+    /// - 'pattern' - 导入模式
+    pub fn import_token(&mut self, path: &Path, pattern: &TokenFilePattern) -> Result<usize> {
+        let import_str = fs::read_to_string(path)?;
+        let mut import_tokens = match pattern {
+            TokenFilePattern::Jtmdy => DEFAULT_REGEX
+                .token_file_pattern_jtmdy
+                .captures_iter(&import_str)
+                .filter(|item| {
+                    // 每项与所有密钥不相同
+                    self.tokens
+                        .iter()
+                        .all(|token| &token.token != &item["token"])
+                })
+                .map(|item| {
+                    Token::create(&item["token"], false, item["count"].parse().unwrap_or(0))
+                })
+                .collect::<Vec<Token>>(),
+            TokenFilePattern::Plain => {
+                if DEFAULT_REGEX.token_file_pattern_jtmdy.is_match(&import_str) {
+                    let msg = "导入的内容中部分与 解TMD压 模式相似，为安全起见停止导入。如果检查无误确实需要导入，请手动修改密钥文件";
+                    error!("{}", msg);
+                    bail!("{}", msg);
+                };
+                import_str
+                    .split("\n")
+                    .filter(|item| {
+                        // 每项长度不为零且与所有密钥不相同
+                        item.len() != 0 && self.tokens.iter().all(|token| &token.token != item)
+                    })
+                    .map(Token::new)
+                    .collect::<Vec<Token>>()
+            }
+        };
+        let import_count = import_tokens.len();
+        self.tokens.append(&mut import_tokens);
+        Ok(import_count)
     }
 
     /// 根据热边界分类密钥
