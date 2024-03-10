@@ -1,0 +1,10 @@
+[package]
+name = "lemmekk"
+description = "让我康康 - 批量解压工具"
+authors = ["Neko <neko@eroneko.eu.org>"]
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
