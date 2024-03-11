@@ -2,8 +2,20 @@
 name = "lemmekk"
 description = "让我康康 - 批量解压工具"
 authors = ["Neko <neko@eroneko.eu.org>"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
+default-run = "lemmekk"
+
+readme = "README.md"
+repository = "https://github.com/nekokit/lemmekk"
+license = "Apache-2.0"
+
+[lib]
+name = "lemmekk"
+
+[[bin]]
+name = "lemmekk"
+path = "src/bin/lemmekk_cli.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

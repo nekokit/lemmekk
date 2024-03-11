@@ -10,9 +10,9 @@ pub const TOKENS: &str = r#"# 示例密钥文件
 #token = 'sample'
 # 使用次数
 #usage_count = 0
-# 添加时间，值为 UTC 时间戳
+# 添加时间，值为 UNIX 时间戳
 #gmt_crate = 1701360000
-# 最后使用时间，值为 UTC 时间戳
+# 最后使用时间，值为 UNIX 时间戳
 #gmt_modified = 1701360000
 
 "#;
