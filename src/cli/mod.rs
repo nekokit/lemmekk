@@ -112,6 +112,22 @@ impl Cli {
                     println!("导入密钥 {} 个", count);
                 }
             },
+
+            // 主命令：解压操作
+            MainCommand::Extract {
+                source: _,
+                search_depth: _,
+                excluded_suffix: _,
+                tokens: _,
+                token_hot_boundary: _,
+                otutput_dir: _,
+                defer_operation: _,
+                recycle_dir: _,
+                analyze_steganography: _,
+                extract_directly: _,
+                smart_directly: _,
+                recursively: _,
+            } => todo!(),
         }
         Ok(())
     }
