@@ -61,7 +61,7 @@ path_7z = ''
 # 解压输入配置：需解压的文件或目录
 #
 # 路径使用半角单引号包裹可不用转义，使用半角双引号包裹需要转义。
-source = ['']
+source = ['test-data']
 
 # 解压配置：文件夹搜索深度
 #
@@ -76,7 +76,26 @@ search_depth = 0
 #
 # 符合的文件将不会解压
 # 扩展名半角单引号包裹，半角逗号+空格或换行分隔，例: `['{扩展名}', '{扩展名}']`
-excluded_suffix = ['iso', 'cab']
+excluded_suffix = [
+    # office 文件
+    'doc', 'docx', 'docm', 'docz', 'dot', 'dotx', 'dotm',
+    'xls', 'xlsx', 'xlsm', 'xlsz', 'xlt', 'xltx', 'xltm',
+    'ppt', 'pptx', 'pptm', 'pptz', 'pot', 'potx', 'potm',
+    'wps', 'msg', 'odt', 'ods', 'odp',
+    # java
+    'jar', 'jarx', 'war', 'xpi',
+    # 安装包
+    'msi', 'cab', 'cabinet', 'deb', 'rpm', 'ipk',
+    'crx', 'apk', 'bar', 'xap', 'ipa', 'pkg',
+    # 资源包
+    'pk3', 'pk4', 'vpk', 'pak', 'zap',
+    'sav', 'save',
+    # 镜像
+    'iso', 'udf', 'mdf', 'mds', 'wim', 'img', 'bin',
+    # 多媒体
+    'epub', 'apng', 'amz',
+    # 其余自定义
+    ]
 
 # 解压配置：优先使用的密钥
 #

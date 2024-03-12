@@ -3,6 +3,10 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+mod manager;
+
+pub use manager::Extractor;
+
 /// # 解压配置
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]

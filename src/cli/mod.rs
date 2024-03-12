@@ -5,7 +5,7 @@ use std::fs;
 use anyhow::{Context, Result};
 use log::debug;
 
-use crate::{Config, TokenManager, DEFAULT_PATH};
+use crate::{Config, Extractor, TokenManager, DEFAULT_PATH};
 
 mod args;
 
@@ -20,6 +20,8 @@ pub struct Cli {
     pub config: Config,
     /// 密钥模块
     pub token_manager: TokenManager,
+    /// 解压模块
+    pub extractor: Extractor,
 }
 
 impl Cli {
@@ -50,21 +52,25 @@ impl Cli {
             .overlay(&cli_args);
 
         let token_manager = TokenManager::default();
-        // let extractor = Extractor::default();
+        let extractor = Extractor::default();
 
         Ok(Self {
             cli_args,
             config,
             token_manager,
+            extractor,
         })
     }
 
     /// 程序执行入口
     pub fn startup(&mut self) -> Result<()> {
         debug!("已加载配置：\n{:#?}", self.config);
+        debug!("初始化密钥管理器");
         self.token_manager
             .load(&self.config.general.token, self.config.token.clone())
             .context("密钥文件加载失败")?;
+
+        // 解析命令
         match &self.cli_args.main_command {
             // 主命令：密钥操作
             MainCommand::Token {
@@ -127,7 +133,11 @@ impl Cli {
                 extract_directly: _,
                 smart_directly: _,
                 recursively: _,
-            } => todo!(),
+            } => {
+                // 初始化解压管理器
+                self.extractor.load(self.config.extract.clone())?;
+                debug!("已初始化解压管理器：\n{:#?}", self.extractor)
+            }
         }
         Ok(())
     }
