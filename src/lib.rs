@@ -13,6 +13,6 @@ mod token;
 
 pub use appinfo::AppInfo;
 pub use cli::{Cli, CliArgs, MainCommand, TokenProcess};
-pub use config::{Config, DEFAULT_PATH, DEFAULT_REGEX};
+pub use config::{Config, TokenConfig, DEFAULT_PATH, DEFAULT_REGEX};
 pub use log::init_logger;
 pub use token::{TokenFilePattern, TokenListStyle, TokenManager};

@@ -16,23 +16,27 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 
 use super::{sample, Token};
-use crate::{TokenFilePattern, TokenListStyle, DEFAULT_REGEX};
+use crate::{TokenConfig, TokenFilePattern, TokenListStyle, DEFAULT_REGEX};
 
 /// # 密钥管理器
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TokenManager {
+    /// 密钥配置
+    #[serde(skip_serializing, skip_deserializing)]
+    pub config: TokenConfig,
+
     /// 本次使用过的密钥
     #[serde(skip_serializing, skip_deserializing)]
-    pub runtime: Vec<Token>,
+    runtime: Vec<Token>,
 
     /// 最近使用过的密钥
     #[serde(skip_serializing, skip_deserializing)]
-    pub recent: Vec<Token>,
+    recent: Vec<Token>,
 
     /// 其他的密钥
     #[serde(skip_serializing, skip_deserializing)]
-    pub other: Vec<Token>,
+    other: Vec<Token>,
 
     /// 密钥文件路径
     #[serde(skip_serializing, skip_deserializing)]
@@ -48,8 +52,8 @@ impl TokenManager {
     /// # Arguments
     ///
     /// - `list_style` - 密钥显示样式
-    pub fn display(&self, list_style: &TokenListStyle) -> String {
-        match list_style {
+    pub fn display(&self) -> String {
+        match self.config.list_style {
             TokenListStyle::Plain => self.list(),
             TokenListStyle::Detail => format!(
                 "{}\n共 {} 个密钥",
@@ -82,8 +86,9 @@ impl TokenManager {
     /// # Arguments
     ///
     /// - 'token_path' - 密钥文件路径
-    pub fn load(&mut self, token_path: &Path) -> Result<()> {
+    pub fn load(&mut self, token_path: &Path, config: TokenConfig) -> Result<()> {
         self.path = token_path.to_path_buf();
+        self.config = config;
         // 如果文件不存在则创建示例
         if !token_path.exists() {
             File::create(token_path)?.write_all(sample::TOKENS.as_bytes())?;
@@ -108,10 +113,17 @@ impl TokenManager {
         let mut hash_map: HashMap<String, Token> = HashMap::new();
         self.tokens.iter().for_each(|item| {
             if let Some(value) = hash_map.get_mut(&item.token) {
-                info!("已合并密钥: {} -> {}", item.display(), value.display());
+                let prev = value.clone();
                 value.usage_count += item.usage_count;
                 value.gmt_crate = value.gmt_crate.min(item.gmt_crate);
                 value.gmt_usage = value.gmt_usage.max(item.gmt_usage);
+
+                info!(
+                    "已合并密钥: {} + {} -> {}",
+                    prev.display(),
+                    item.display(),
+                    value.display()
+                );
             } else {
                 hash_map.insert(item.token.to_string(), item.clone());
             }
@@ -124,13 +136,16 @@ impl TokenManager {
     /// # Arguments
     ///
     /// - `token_strs` - 需要删除的密钥字符串
-    pub fn delete_tokens(&mut self, token_strs: &[String]) -> usize {
+    pub fn delete_tokens(&mut self, token_strs: &[String]) -> Result<usize> {
         if token_strs.len() == 0 {
-            return 0;
+            return Ok(0);
         };
         let prev = self.count();
         self.tokens.retain(|item| !token_strs.contains(&item.token));
-        prev - self.count()
+        self.write()?;
+        let delete_count = prev - self.count();
+        info!("删除密钥：{:?} 共删除 {} 个", token_strs, delete_count);
+        Ok(delete_count)
     }
 
     /// 添加密钥
@@ -138,9 +153,9 @@ impl TokenManager {
     /// # Arguments
     ///
     /// - `token_strs` - 需要添加的密钥字符串
-    pub fn add_tokens(&mut self, token_strs: &[String]) -> usize {
+    pub fn add_tokens(&mut self, token_strs: &[String]) -> Result<usize> {
         if token_strs.len() == 0 {
-            return 0;
+            return Ok(0);
         };
         let mut add_tokens = token_strs
             .into_iter()
@@ -153,7 +168,9 @@ impl TokenManager {
             .collect::<Vec<Token>>();
         let add_count = add_tokens.len();
         self.tokens.append(&mut add_tokens);
-        add_count
+        self.write()?;
+        info!("添加密钥：{:?} 共添加 {} 个", token_strs, add_count);
+        Ok(add_count)
     }
 
     /// 导出密钥
@@ -162,8 +179,8 @@ impl TokenManager {
     ///
     /// - 'path' - 导出路径
     /// - 'pattern' - 导出模式
-    pub fn export_token(&self, path: &Path, pattern: &TokenFilePattern) -> Result<usize> {
-        let export_str = match pattern {
+    pub fn export_token(&self) -> Result<usize> {
+        let export_str = match self.config.export_pattern {
             TokenFilePattern::Plain => self
                 .tokens
                 .iter()
@@ -177,8 +194,14 @@ impl TokenManager {
                 .collect::<Vec<String>>()
                 .join("\n"),
         };
-        fs::write(path, export_str)?;
-        Ok(self.count())
+        fs::write(&self.config.export_file, export_str)?;
+        let count = self.count();
+        info!(
+            "导出密钥文件：{} 共导出 {} 个密钥",
+            self.path.display(),
+            count
+        );
+        Ok(count)
     }
 
     /// 导入密钥
@@ -187,9 +210,9 @@ impl TokenManager {
     ///
     /// - 'path' - 导入路径
     /// - 'pattern' - 导入模式
-    pub fn import_token(&mut self, path: &Path, pattern: &TokenFilePattern) -> Result<usize> {
-        let import_str = fs::read_to_string(path)?;
-        let mut import_tokens = match pattern {
+    pub fn import_token(&mut self) -> Result<usize> {
+        let import_str = fs::read_to_string(&self.config.import_file)?;
+        let mut import_tokens = match self.config.import_pattern {
             TokenFilePattern::Jtmdy => DEFAULT_REGEX
                 .token_file_pattern_jtmdy
                 .captures_iter(&import_str)
@@ -221,6 +244,12 @@ impl TokenManager {
         };
         let import_count = import_tokens.len();
         self.tokens.append(&mut import_tokens);
+
+        info!(
+            "导入密钥文件：{} 共导入 {} 个密钥",
+            self.path.display(),
+            import_count
+        );
         Ok(import_count)
     }
 

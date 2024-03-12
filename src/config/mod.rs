@@ -28,7 +28,7 @@ pub struct Config {
     /// 解压配置
     // pub extract: ExtractConfig,
 
-    /// 转换配置
+    /// 密钥配置
     pub token: TokenConfig,
 }
 
@@ -147,7 +147,7 @@ impl Default for GeneralConfig {
     }
 }
 
-/// # 导入导出设置
+/// # 密钥配置
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TokenConfig {

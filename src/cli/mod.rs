@@ -2,8 +2,8 @@
 
 use std::fs;
 
-use anyhow::{Context, Ok, Result};
-use log::{debug, info};
+use anyhow::{Context, Result};
+use log::debug;
 
 use crate::{Config, TokenManager, DEFAULT_PATH};
 
@@ -63,7 +63,7 @@ impl Cli {
     pub fn startup(&mut self) -> Result<()> {
         debug!("已加载配置：\n{:#?}", self.config);
         self.token_manager
-            .load(&self.config.general.token)
+            .load(&self.config.general.token, self.config.token.clone())
             .context("密钥文件加载失败")?;
         match &self.cli_args.main_command {
             // 主命令：密钥操作
@@ -74,30 +74,23 @@ impl Cli {
             } => match command {
                 // 增添密钥
                 None => {
-                    let mut flag_is_updated = false;
                     if delete.len() > 0 {
-                        let delete_count = self.token_manager.delete_tokens(delete);
-                        info!("删除密钥：{:?} 共删除 {} 个", delete, delete_count);
-                        println!("删除密钥 {} 个", delete_count);
-                        flag_is_updated = true;
+                        let delete_count = self
+                            .token_manager
+                            .delete_tokens(delete)
+                            .context("删除密钥失败")?;
+                        println!("删除密钥 {} 个", delete_count)
                     }
                     if add.len() > 0 {
-                        let add_count = self.token_manager.add_tokens(add);
-                        info!("添加密钥：{:?} 共添加 {} 个", add, add_count);
+                        let add_count =
+                            self.token_manager.add_tokens(add).context("添加密钥失败")?;
                         println!("添加密钥 {} 个", add_count);
-                        flag_is_updated = true;
-                    }
-                    if flag_is_updated {
-                        self.token_manager.write()?;
                     }
                 }
 
                 // 列出密钥
                 Some(TokenProcess::List { style: _ }) => {
-                    println!(
-                        "{}",
-                        self.token_manager.display(&self.config.token.list_style)
-                    );
+                    println!("{}", self.token_manager.display());
                 }
 
                 // 导出密钥
@@ -105,12 +98,7 @@ impl Cli {
                     pattern: _,
                     file: _,
                 }) => {
-                    let path = &self.config.token.export_file;
-                    let count = self
-                        .token_manager
-                        .export_token(path, &self.config.token.export_pattern)?;
-
-                    info!("导出密钥文件：{} 共导出 {} 个密钥", path.display(), count);
+                    let count = self.token_manager.export_token()?;
                     println!("导出密钥 {} 个", count);
                 }
 
@@ -119,13 +107,8 @@ impl Cli {
                     pattern: _,
                     file: _,
                 }) => {
-                    let path = &self.config.token.import_file;
-                    let count = self
-                        .token_manager
-                        .import_token(path, &self.config.token.import_pattern)?;
+                    let count = self.token_manager.import_token()?;
                     self.token_manager.write()?;
-
-                    info!("导入密钥文件：{} 共导入 {} 个密钥", path.display(), count);
                     println!("导入密钥 {} 个", count);
                 }
             },
