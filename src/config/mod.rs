@@ -10,7 +10,10 @@ use anyhow::{Context, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
 
-use crate::{CliArgs, MainCommand, TokenFilePattern, TokenListStyle, TokenProcess};
+use crate::{
+    CliArgs, DeferOperation, ExtractMethod, MainCommand, TokenFilePattern, TokenListStyle,
+    TokenProcess,
+};
 
 mod provider;
 mod sample;
@@ -26,7 +29,7 @@ pub struct Config {
     pub general: GeneralConfig,
 
     /// 解压配置
-    // pub extract: ExtractConfig,
+    pub extract: ExtractConfig,
 
     /// 密钥配置
     pub token: TokenConfig,
@@ -69,6 +72,10 @@ impl Config {
                 "token.log_file 为空字符串，使用默认路径：{}",
                 config.token.import_file.display()
             );
+        };
+        if config.extract.path_7z == None || config.extract.path_7z == Some(PathBuf::new()) {
+            config.extract.path_7z = None;
+            debug!("extract.path_7z 为空字符串，将直接调用 7z");
         };
         Ok(config)
     }
@@ -126,7 +133,57 @@ impl Config {
                 _ => {}
             },
             // Extract 表
-            // ...
+            MainCommand::Extract {
+                source,
+                search_depth,
+                excluded_suffix,
+                tokens,
+                token_hot_boundary,
+                otutput_dir,
+                defer_operation,
+                recycle_dir,
+                analyze_steganography,
+                extract_directly,
+                smart_directly,
+                recursively,
+            } => {
+                if source.len() > 0 {
+                    self.extract.source = source.clone();
+                };
+                if let Some(v) = search_depth {
+                    self.extract.search_depth = *v;
+                };
+                if excluded_suffix.len() > 0 {
+                    self.extract.excluded_suffix = excluded_suffix.clone();
+                };
+                if tokens.len() > 0 {
+                    self.extract.tokens = tokens.clone();
+                };
+                if let Some(v) = token_hot_boundary {
+                    self.extract.token_hot_boundary = *v;
+                };
+                if let Some(p) = otutput_dir {
+                    self.extract.otutput_dir = p.to_path_buf();
+                };
+                if let Some(v) = defer_operation {
+                    self.extract.defer_operation = v.clone();
+                };
+                if let Some(p) = recycle_dir {
+                    self.extract.recycle_dir = p.to_path_buf();
+                };
+                if let Some(v) = analyze_steganography {
+                    self.extract.method.analyze_steganography = *v;
+                };
+                if let Some(v) = extract_directly {
+                    self.extract.method.extract_directly = *v;
+                };
+                if let Some(v) = smart_directly {
+                    self.extract.method.smart_directly = *v;
+                };
+                if let Some(v) = recursively {
+                    self.extract.method.recursively = *v;
+                };
+            }
         }
         self
     }
@@ -170,6 +227,48 @@ impl Default for TokenConfig {
             import_file: DEFAULT_PATH.token_convert.to_path_buf(),
             export_pattern: TokenFilePattern::Plain,
             export_file: DEFAULT_PATH.token_convert.to_path_buf(),
+        }
+    }
+}
+
+/// # 解压配置
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ExtractConfig {
+    /// 7zip 程序路径
+    pub path_7z: Option<PathBuf>,
+    /// 需解压的文件或目录
+    pub source: Vec<PathBuf>,
+    /// 文件夹搜索深度
+    pub search_depth: i8,
+    /// 排除的文件扩展名
+    pub excluded_suffix: Vec<String>,
+    /// 优先使用的密钥
+    pub tokens: Vec<String>,
+    /// 常用密钥存留时间
+    pub token_hot_boundary: usize,
+    /// 解压目标文件夹
+    pub otutput_dir: PathBuf,
+    /// 解压后对压缩文件的操作
+    pub defer_operation: DeferOperation,
+    /// 回收文件夹
+    pub recycle_dir: PathBuf,
+    /// 回收文件夹
+    pub method: ExtractMethod,
+}
+impl Default for ExtractConfig {
+    fn default() -> Self {
+        Self {
+            path_7z: None,
+            source: vec![],
+            search_depth: 0,
+            excluded_suffix: vec![],
+            tokens: vec![],
+            token_hot_boundary: 30,
+            otutput_dir: PathBuf::new(),
+            defer_operation: DeferOperation::DoNothing,
+            recycle_dir: PathBuf::new(),
+            method: ExtractMethod::default(),
         }
     }
 }
