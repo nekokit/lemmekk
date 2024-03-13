@@ -14,7 +14,7 @@ mod token;
 
 pub use appinfo::AppInfo;
 pub use cli::{Cli, CliArgs, MainCommand, TokenProcess};
-pub use config::{Config, TokenConfig, DEFAULT_PATH, DEFAULT_REGEX};
-pub use extract::{DeferOperation, ExtractMethod, Extractor};
+pub use config::{Config, TokenConfig, COVER_FEATURE, DEFAULT_PATH, DEFAULT_REGEX, STEGO_FEATURE};
+pub use extract::{DeferOperation, ExtractJob, ExtractJobKind, ExtractMethod, Extractor};
 pub use log::init_logger;
 pub use token::{TokenFilePattern, TokenListStyle, TokenManager};

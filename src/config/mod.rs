@@ -18,7 +18,7 @@ use crate::{
 mod provider;
 mod sample;
 
-pub use provider::{DEFAULT_PATH, DEFAULT_REGEX};
+pub use provider::{COVER_FEATURE, DEFAULT_PATH, DEFAULT_REGEX, STEGO_FEATURE};
 
 /// # 配置
 /// 包括通用、解压和转换配置
@@ -50,7 +50,7 @@ impl Config {
             Self::create_sample(config_path).context("示例配置文件创建失败")?;
         };
         let mut config: Config = toml::from_str(&fs::read_to_string(config_path)?)?;
-        debug!("读取配置文件\n{:#?}", config);
+        debug!("已读取配置文件");
         // 如果配置文件为空字符串
         if config.general.token == PathBuf::new() {
             config.general.token = DEFAULT_PATH.token.to_path_buf();
@@ -269,6 +269,14 @@ impl Default for ExtractConfig {
             defer_operation: DeferOperation::DoNothing,
             recycle_dir: PathBuf::new(),
             method: ExtractMethod::default(),
+        }
+    }
+}
+impl ExtractConfig {
+    pub fn get_command_7z(&self) -> PathBuf {
+        match &self.path_7z {
+            Some(p) => p.to_path_buf(),
+            None => PathBuf::from("7z"),
         }
     }
 }

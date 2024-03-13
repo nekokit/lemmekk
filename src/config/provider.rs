@@ -5,7 +5,7 @@ use std::env;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 
 /// 默认路径提供器
 #[derive(Debug)]
@@ -72,15 +72,56 @@ pub const DEFAULT_PATH: LazyCell<DefaultPath> = LazyCell::new(|| DefaultPath::de
 /// 默认正则提供器
 #[derive(Debug)]
 pub struct DefaultRegex {
+    /// 解TMD压 密码本模式
     pub token_file_pattern_jtmdy: Regex,
+    /// 7zip 版本
+    pub version_7z: Regex,
+    /// 分卷压缩包名
+    pub split_pack_name: Vec<Regex>,
 }
 impl Default for DefaultRegex {
     fn default() -> Self {
         Self {
             token_file_pattern_jtmdy: Regex::new(r"\b(?<token>.+)\t\t(?<count>\d+)\b").unwrap(),
+            version_7z: RegexBuilder::new(r"\b7-Zip.*? (?<version>\d+.\d+) ")
+                .case_insensitive(true)
+                .build()
+                .unwrap(),
+            split_pack_name: vec![
+                RegexBuilder::new(r"^(?<package>.*)\.part(?<vol>\d+).(:?rar|exe)$")
+                    .case_insensitive(true)
+                    .build()
+                    .unwrap(),
+                RegexBuilder::new(r"^(?<package>.*).7z.(?<vol>\d{3,})$")
+                    .case_insensitive(true)
+                    .build()
+                    .unwrap(),
+            ],
         }
     }
 }
 
 /// 默认正则提供器
 pub const DEFAULT_REGEX: LazyCell<DefaultRegex> = LazyCell::new(|| DefaultRegex::default());
+
+/// 魔数提供器
+pub const COVER_FEATURE: [(&str, &[u8], &[u8]); 5] = [
+    ("jpg", &[0xFF, 0xD8, 0xFF], &[0xFF, 0xD9]),
+    ("png", &[0x89, 0x50, 0x4E, 0x47], &[0xAE, 0x42, 0x60, 0x82]),
+    ("gif", &[0x47, 0x49, 0x46, 0x38, 0x39, 0x61], &[0x00, 0x3B]),
+    ("gif", &[0x47, 0x49, 0x46, 0x38, 0x37, 0x61], &[0x00, 0x3B]),
+    ("webp", &[0x52, 0x49, 0x46, 0x46], &[]),
+];
+pub const STEGO_FEATURE: [(&str, &[u8], &[u8]); 11] = [
+    ("zip", &[0x50, 0x4B, 0x03, 0x04], &[]),
+    ("rar", &[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00], &[]),
+    ("7z", &[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C], &[]),
+    ("tar", &[0x75, 0x73, 0x74, 0x61, 0x72], &[]),
+    ("xz", &[0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00], &[]),
+    ("targz", &[0x1F, 0x8B, 0x08, 0x00], &[]),
+    ("gz", &[0x1F, 0x8B], &[]),
+    ("tarbz", &[0x42, 0x5A, 0x68, 0x39, 0x17], &[]),
+    ("bz2", &[0x42, 0x5A, 0x68], &[]),
+    ("bz", &[0x42, 0x5A], &[]),
+    ("z", &[0x1F, 0x9D], &[]),
+];
