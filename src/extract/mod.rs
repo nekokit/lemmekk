@@ -3,8 +3,10 @@
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
+mod job;
 mod manager;
 
+pub use job::{ExtractJob, ExtractJobKind};
 pub use manager::Extractor;
 
 /// # 解压配置
@@ -31,9 +33,13 @@ impl Default for ExtractMethod {
     }
 }
 
+/// # 解压后操作
 #[derive(Clone, Debug, Serialize, Deserialize, ValueEnum)]
 pub enum DeferOperation {
+    /// 什么都不做
     DoNothing,
+    /// 删除
     Delete,
+    /// 移动
     Move,
 }
