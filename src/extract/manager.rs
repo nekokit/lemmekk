@@ -20,7 +20,6 @@ pub struct Extractor {
 impl Extractor {
     /// 解压管理器初始化
     pub fn load(&mut self, config: ExtractConfig) -> Result<()> {
-        debug!("初始化解压管理器");
         self.config = config;
         // todo 测试7z
         self.test_7z().context("测试 7z 命令失败")?;
@@ -71,7 +70,6 @@ impl Extractor {
                 }
                 return acc;
             });
-        info!("{:#?}", files);
         if self.config.excluded_suffix.len() > 0 {
             debug!("过滤扩展名：{:?}", self.config.excluded_suffix);
             files = files
@@ -139,7 +137,7 @@ impl Extractor {
                                 // 已存在同名分卷
                                 Some(value) => {
                                     info!(
-                                        "文件 {} 已加入分卷压缩列表 {}",
+                                        "文件 [{}] 已加入分卷压缩列表 {}",
                                         item.display(),
                                         value.package
                                     );
@@ -162,6 +160,11 @@ impl Extractor {
 
                                 // 不存在同名分卷则转为任务添加进 hashmap
                                 None => {
+                                    info!(
+                                        "通过文件 [{}] 创建解压任务：{} ",
+                                        item.display(),
+                                        package
+                                    );
                                     acc.insert(
                                         key.clone(),
                                         ExtractJob {
@@ -185,7 +188,6 @@ impl Extractor {
                         // 如果与分卷文件名不匹配
                         // key(是否分卷,目录,包名)
                         let key = (false, dir_path.to_path_buf(), filename.clone());
-                        debug!("KEY: {:?}", key);
                         let package =
                             match item.with_extension("").file_name().and_then(OsStr::to_str) {
                                 Some(s) => s.to_string(),
@@ -212,7 +214,14 @@ impl Extractor {
             .into_values()
             .collect::<Vec<ExtractJob>>();
 
-        info!("载入解压任务完成：{:#?}", jobs_unchecked);
+        info!(
+            "载入解压任务完成：[\n{}\n]",
+            jobs_unchecked
+                .iter()
+                .map(|j| j.to_string())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
 
         // todo 处理隐写
         // if self.config.method.analyze_steganography {}

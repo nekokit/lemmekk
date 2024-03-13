@@ -2,7 +2,7 @@
 name = "lemmekk"
 description = "让我康康 - 批量解压工具"
 authors = ["Neko <neko@eroneko.eu.org>"]
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 default-run = "lemmekk"
 

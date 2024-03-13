@@ -64,7 +64,7 @@ impl Cli {
 
     /// 程序执行入口
     pub fn startup(&mut self) -> Result<()> {
-        debug!("已加载配置：\n{:#?}", self.config);
+        debug!("已加载配置");
         debug!("初始化密钥管理器");
         self.token_manager
             .load(&self.config.general.token, self.config.token.clone())
@@ -136,12 +136,12 @@ impl Cli {
             } => {
                 // 初始化解压管理器
                 self.extractor.load(self.config.extract.clone())?;
-                debug!("已初始化解压管理器：\n{:#?}", self.extractor);
+                debug!("已初始化解压管理器");
                 // 识别文件头并创建任务，任务作为状态机，
                 // 未分类 -> /分卷合并/ -> 任务列表 -> /处理隐写/ ->
                 // -> 普通,分卷 -> /查询密码/ -> 加密,未加密 -> 准备解压
                 self.extractor.create_extract_job();
-                todo!();
+                // todo!();
             }
         }
         Ok(())

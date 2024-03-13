@@ -50,7 +50,7 @@ impl Config {
             Self::create_sample(config_path).context("示例配置文件创建失败")?;
         };
         let mut config: Config = toml::from_str(&fs::read_to_string(config_path)?)?;
-        debug!("读取配置文件\n{:#?}", config);
+        debug!("已读取配置文件");
         // 如果配置文件为空字符串
         if config.general.token == PathBuf::new() {
             config.general.token = DEFAULT_PATH.token.to_path_buf();
