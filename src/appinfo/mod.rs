@@ -33,7 +33,7 @@ impl Default for AppInfo {
             lib_version: Version {
                 major: 0,
                 minor: 1,
-                revision: 5,
+                revision: 6,
                 edition: Edition::Dev,
             },
         }

@@ -142,7 +142,7 @@ impl Config {
                 otutput_dir,
                 defer_operation,
                 recycle_dir,
-                analyze_steganography,
+                recogniz_steganography,
                 extract_directly,
                 smart_directly,
                 recursively,
@@ -171,8 +171,8 @@ impl Config {
                 if let Some(p) = recycle_dir {
                     self.extract.recycle_dir = p.to_path_buf();
                 };
-                if let Some(v) = analyze_steganography {
-                    self.extract.method.analyze_steganography = *v;
+                if let Some(v) = recogniz_steganography {
+                    self.extract.method.recogniz_steganography = *v;
                 };
                 if let Some(v) = extract_directly {
                     self.extract.method.extract_directly = *v;

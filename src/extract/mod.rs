@@ -14,7 +14,7 @@ pub use manager::Extractor;
 #[serde(default)]
 pub struct ExtractMethod {
     /// 识别图片隐写文件
-    pub analyze_steganography: bool,
+    pub recogniz_steganography: bool,
     /// 直接解压
     pub extract_directly: bool,
     /// 智能直接解压
@@ -25,7 +25,7 @@ pub struct ExtractMethod {
 impl Default for ExtractMethod {
     fn default() -> Self {
         Self {
-            analyze_steganography: false,
+            recogniz_steganography: false,
             extract_directly: false,
             smart_directly: false,
             recursively: false,
