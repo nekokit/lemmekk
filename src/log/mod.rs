@@ -12,9 +12,7 @@ use log4rs::Handle;
 /// 日志初始化操作
 pub fn init_logger(log_path: &Path) -> Result<Handle> {
     let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new(
-            "[ {d(%Y-%m-%dT%H:%M:%S %Z)(utc)} | {M} | {l} ] {m}{n}",
-        )))
+        .encoder(Box::new(PatternEncoder::new("{h([ {l} ])} {m}{n}")))
         .build();
 
     let logfile = FileAppender::builder()

@@ -15,6 +15,7 @@ use crate::{config::ExtractConfig, ExtractJob, ExtractJobKind, DEFAULT_REGEX};
 pub struct Extractor {
     config: ExtractConfig,
     files: Vec<PathBuf>,
+    jobs: Vec<ExtractJob>,
 }
 
 impl Extractor {
@@ -36,7 +37,7 @@ impl Extractor {
             .version_7z
             .captures(&String::from_utf8(output.stdout)?)
         {
-            Some(cap) => println!("7z ver.{}", &cap["version"]),
+            Some(cap) => info!("7z ver.{}", &cap["version"]),
             None => warn!("未知的 7z 版本"),
         };
         Ok(())
@@ -93,7 +94,21 @@ impl Extractor {
     /// 根据载入的文件列表，合并分卷并识别隐写文件
     pub fn create_extract_job(&mut self) {
         // 载入任务，识别分卷
-        let jobs_unchecked = self
+        info!("创建解压任务");
+        self.load_unchecked_jobs();
+
+        // 处理隐写
+        if self.config.method.recogniz_steganography {
+            // 尝试分离隐写文件
+            self.separate_stego();
+        };
+
+        info!("载入解压任务完成，共 [ {} ] 个", self.jobs.len());
+        debug!("解压任务列表：{:#?}", self.jobs);
+    }
+
+    fn load_unchecked_jobs(&mut self) {
+        self.jobs = self
             .files
             .iter()
             .fold(
@@ -137,7 +152,7 @@ impl Extractor {
                                 // 已存在同名分卷
                                 Some(value) => {
                                     info!(
-                                        "文件 [{}] 已加入分卷压缩列表 {}",
+                                        "文件 \"{}\" 加入解压任务 [{}]",
                                         item.display(),
                                         value.package
                                     );
@@ -161,7 +176,7 @@ impl Extractor {
                                 // 不存在同名分卷则转为任务添加进 hashmap
                                 None => {
                                     info!(
-                                        "通过文件 [{}] 创建解压任务：{} ",
+                                        "通过 \"{}\" 创建解压任务 [{}] ",
                                         item.display(),
                                         package
                                     );
@@ -212,18 +227,47 @@ impl Extractor {
                 },
             )
             .into_values()
+            .collect()
+    }
+
+    fn separate_stego(&mut self) {
+        // 除普通任务外不作处理
+        let mut new_jobs = self
+            .jobs
+            .iter()
+            .filter(|job| job.kind != ExtractJobKind::Normal)
+            .map(Clone::clone)
             .collect::<Vec<ExtractJob>>();
-
-        info!(
-            "载入解压任务完成：[\n{}\n]",
-            jobs_unchecked
-                .iter()
-                .map(|j| j.to_string())
-                .collect::<Vec<String>>()
-                .join("\n")
-        );
-
-        // todo 处理隐写
-        // if self.config.method.analyze_steganography {}
+        // 对不同任务尝试进行分离
+        self.jobs
+            .iter_mut()
+            .filter(|job| job.kind == ExtractJobKind::Normal)
+            .for_each(|job| match job.find_target_file_offset() {
+                // 若取得偏移
+                Ok(Some(offset)) => {
+                    job.kind = ExtractJobKind::Stego(offset);
+                    // 创建临时文件
+                    info!("尝试分离隐写文件");
+                    match job.create_temp_file() {
+                        Ok(_) => {
+                            info!("完成");
+                            new_jobs.push(job.clone())
+                        }
+                        Err(e) => {
+                            warn!("创建临时文件失败，跳过[{}]: {}", job.path.display(), e)
+                        }
+                    };
+                }
+                // 不符合隐写特征直接介入列表
+                Ok(None) => {
+                    debug!("没有找到隐写特征：{}", job.path.display());
+                    new_jobs.push(job.clone())
+                }
+                // 识别出现错误则跳过
+                Err(e) => {
+                    warn!("分离隐写文件失败，跳过[{}]: {}", job.path.display(), e)
+                }
+            });
+        self.jobs = new_jobs;
     }
 }

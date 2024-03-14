@@ -24,7 +24,7 @@ fn main() {
     let mut appinfo = AppInfo::default();
     appinfo.set_module_name("Cli");
     appinfo.set_module_version(0, 1, 0, "Dev");
-    // println!("{}", appinfo.display());
+    // info!("{}", appinfo.display());
 
     // 创建 App 对象并使用执行参数覆盖配置文件
     let mut cli = match Cli::create(CliArgs::parse()) {

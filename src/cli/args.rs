@@ -185,7 +185,7 @@ pub enum MainCommand {
             help = "识别图片隐写文件",
             long_help = "是否识别图片隐写文件，默认为 false。"
         )]
-        analyze_steganography: Option<bool>,
+        recogniz_steganography: Option<bool>,
 
         /// 解压选项：直接解压
         ///

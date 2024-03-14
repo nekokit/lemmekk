@@ -3,7 +3,7 @@
 use std::fs;
 
 use anyhow::{Context, Result};
-use log::debug;
+use log::{debug, info};
 
 use crate::{Config, Extractor, TokenManager, DEFAULT_PATH};
 
@@ -64,7 +64,7 @@ impl Cli {
 
     /// 程序执行入口
     pub fn startup(&mut self) -> Result<()> {
-        debug!("已加载配置");
+        debug!("已加载配置：\n{:#?}", self.config);
         debug!("初始化密钥管理器");
         self.token_manager
             .load(&self.config.general.token, self.config.token.clone())
@@ -85,12 +85,12 @@ impl Cli {
                             .token_manager
                             .delete_tokens(delete)
                             .context("删除密钥失败")?;
-                        println!("删除密钥 {} 个", delete_count)
+                        info!("删除密钥 {} 个", delete_count)
                     }
                     if add.len() > 0 {
                         let add_count =
                             self.token_manager.add_tokens(add).context("添加密钥失败")?;
-                        println!("添加密钥 {} 个", add_count);
+                        info!("添加密钥 {} 个", add_count);
                     }
                 }
 
@@ -105,7 +105,7 @@ impl Cli {
                     file: _,
                 }) => {
                     let count = self.token_manager.export_token()?;
-                    println!("导出密钥 {} 个", count);
+                    info!("导出密钥 {} 个", count);
                 }
 
                 // 导入密钥
@@ -115,7 +115,7 @@ impl Cli {
                 }) => {
                     let count = self.token_manager.import_token()?;
                     self.token_manager.write()?;
-                    println!("导入密钥 {} 个", count);
+                    info!("导入密钥 {} 个", count);
                 }
             },
 
@@ -129,7 +129,7 @@ impl Cli {
                 otutput_dir: _,
                 defer_operation: _,
                 recycle_dir: _,
-                analyze_steganography: _,
+                recogniz_steganography: _,
                 extract_directly: _,
                 smart_directly: _,
                 recursively: _,
