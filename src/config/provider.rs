@@ -88,11 +88,15 @@ impl Default for DefaultRegex {
                 .build()
                 .unwrap(),
             split_pack_name: vec![
-                RegexBuilder::new(r"^(?<package>.*)\.part(?<vol>\d+).(:?rar|exe)$")
+                RegexBuilder::new(r"^(?<package>.*)\.part(?<vol>\d+)\.(:?rar|exe)$")
                     .case_insensitive(true)
                     .build()
                     .unwrap(),
-                RegexBuilder::new(r"^(?<package>.*).7z.(?<vol>\d{3,})$")
+                RegexBuilder::new(r"^(?<package>.*)\.(?:7z|zip|tar)\.(?<vol>\d{3,})$")
+                    .case_insensitive(true)
+                    .build()
+                    .unwrap(),
+                RegexBuilder::new(r"^(?<package>.*)\.z(?<vol>\d{2,})$")
                     .case_insensitive(true)
                     .build()
                     .unwrap(),
