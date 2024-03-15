@@ -3,12 +3,19 @@
 //! 提供解压管理器，用于操作识别解压文件、生成解压任务、解压任务的解析与调度。
 
 use log::{debug, info, warn};
-use std::{collections::HashMap, ffi::OsStr, path::PathBuf, process};
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    process,
+};
 
 use anyhow::{Context, Result};
 use walkdir::WalkDir;
 
-use crate::{config::ExtractConfig, ExtractJob, ExtractJobKind, DEFAULT_REGEX};
+use crate::{config::ExtractConfig, ExtractJob, ExtractJobKind, DEFAULT_REGEX, STEGO_FEATURE};
 
 /// # 解压管理器
 #[derive(Debug, Default)]
@@ -22,7 +29,7 @@ impl Extractor {
     /// 解压管理器初始化
     pub fn load(&mut self, config: ExtractConfig) -> Result<()> {
         self.config = config;
-        // todo 测试7z
+        // 测试 7z
         self.test_7z().context("测试 7z 命令失败")?;
         self.load_files();
         Ok(())
@@ -97,6 +104,9 @@ impl Extractor {
         info!("创建解压任务");
         self.load_unchecked_jobs();
 
+        // 过滤 jobs 中文件数量不正确的任务
+        self.jobs_filtrate_illegal_file_numeber();
+
         // 处理隐写
         if self.config.method.recogniz_steganography {
             // 尝试分离隐写文件
@@ -134,11 +144,25 @@ impl Extractor {
                                 p
                             }
                         });
+
+                    // 识别由 winrar 生成的 zip 分卷
+                    let mut flag_zip_splited_by_winrar = false;
+                    // 判断后缀名为 zip 且 文件头不是 &[0x50, 0x4B, 0x03, 0x04]
+                    if item.extension().and_then(OsStr::to_str).unwrap_or("") == "zip" {
+                        flag_zip_splited_by_winrar = match is_zip_splited_by_winrar(item) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                warn!("无法判断 zip 文件是否分卷[{}]: {}", item.display(), e);
+                                false
+                            }
+                        };
+                    };
+
                     if let Some(r) = matched_pattern {
-                        // 如果与分卷压缩名匹配
+                        // 如果与分卷文件名正则匹配
                         if let Some(cap) = r.captures(&filename) {
                             let package = cap["package"].to_string();
-                            let volume = match cap["vol"].to_string().parse::<usize>() {
+                            let vol = match cap["vol"].to_string().parse::<usize>() {
                                 Ok(v) => v,
                                 Err(e) => {
                                     warn!("解析分卷出错[{}]: {}", e, item.display());
@@ -156,15 +180,18 @@ impl Extractor {
                                         item.display(),
                                         value.package
                                     );
-                                    if volume == 1 {
+                                    if vol == 1 {
                                         // 如果是第 1 卷则加入解压路径
                                         value.path = item.to_path_buf();
                                     } else {
                                         // 如果不是第 1 卷则加入更新最大卷并加入关联列表
                                         match &mut value.kind {
-                                            crate::ExtractJobKind::Split(v) => {
-                                                if &volume > v {
-                                                    *v = volume
+                                            ExtractJobKind::Split {
+                                                volume,
+                                                zip_splited_by_winrar: _,
+                                            } => {
+                                                if &vol > volume {
+                                                    *volume = vol
                                                 }
                                             }
                                             _ => {}
@@ -184,13 +211,16 @@ impl Extractor {
                                         key.clone(),
                                         ExtractJob {
                                             package,
-                                            kind: ExtractJobKind::Split(volume),
-                                            path: match volume {
+                                            kind: ExtractJobKind::Split {
+                                                volume: vol,
+                                                zip_splited_by_winrar: false,
+                                            },
+                                            path: match vol {
                                                 1 => item.to_path_buf(),
                                                 _ => PathBuf::new(),
                                             },
                                             token: String::new(),
-                                            relevant: match volume {
+                                            relevant: match vol {
                                                 1 => vec![],
                                                 _ => vec![item.to_path_buf()],
                                             },
@@ -200,9 +230,7 @@ impl Extractor {
                             };
                         }
                     } else {
-                        // 如果与分卷文件名不匹配
-                        // key(是否分卷,目录,包名)
-                        let key = (false, dir_path.to_path_buf(), filename.clone());
+                        // 如果与分卷文件名正则不匹配
                         let package =
                             match item.with_extension("").file_name().and_then(OsStr::to_str) {
                                 Some(s) => s.to_string(),
@@ -211,23 +239,81 @@ impl Extractor {
                                     return acc;
                                 }
                             };
-                        acc.insert(
-                            key,
-                            ExtractJob {
-                                package,
-                                kind: ExtractJobKind::Normal,
-                                path: item.to_path_buf(),
-                                token: String::new(),
-                                relevant: vec![],
-                            },
+
+                        // key(是否分卷,目录,包名)
+                        let key = (
+                            flag_zip_splited_by_winrar,
+                            dir_path.to_path_buf(),
+                            package.clone(),
                         );
+
+                        match flag_zip_splited_by_winrar {
+                            // 若为特殊分卷
+                            true => match acc.get_mut(&key) {
+                                // 若列表中已有同键任务
+                                Some(value) => {
+                                    let vol = match value.kind {
+                                        // 若原有任务应是分卷任务
+                                        ExtractJobKind::Split {
+                                            volume,
+                                            zip_splited_by_winrar: _,
+                                        } => Some(volume),
+                                        // 若原有任务非分卷任务
+                                        _ => {
+                                            warn!(
+                                                "解压任务 [{}] 不是分卷任务，文件未添加：{}",
+                                                value.package,
+                                                item.to_path_buf().display()
+                                            );
+                                            None
+                                        }
+                                    };
+                                    if let Some(volume) = vol {
+                                        value.kind = ExtractJobKind::Split {
+                                            volume,
+                                            zip_splited_by_winrar: true,
+                                        };
+                                        value.relevant.push(item.to_path_buf());
+                                    };
+                                }
+                                // 若列表中没有同键任务
+                                None => {
+                                    acc.insert(
+                                        key,
+                                        ExtractJob {
+                                            package,
+                                            kind: ExtractJobKind::Split {
+                                                volume: 0,
+                                                zip_splited_by_winrar: true,
+                                            },
+                                            path: PathBuf::new(),
+                                            token: String::new(),
+                                            relevant: vec![item.to_path_buf()],
+                                        },
+                                    );
+                                }
+                            },
+                            // 若为普通任务
+                            false => {
+                                acc.insert(
+                                    key,
+                                    ExtractJob {
+                                        package,
+                                        kind: ExtractJobKind::Normal,
+                                        path: item.to_path_buf(),
+                                        token: String::new(),
+                                        relevant: vec![],
+                                    },
+                                );
+                            }
+                        };
                     }
 
                     acc
                 },
             )
             .into_values()
-            .collect()
+            .collect();
     }
 
     fn separate_stego(&mut self) {
@@ -270,4 +356,21 @@ impl Extractor {
             });
         self.jobs = new_jobs;
     }
+
+    pub fn jobs_filtrate_illegal_file_numeber(&mut self) {
+        let new_jobs = self
+            .jobs
+            .clone()
+            .into_iter()
+            .filter(ExtractJob::check_file_number)
+            .collect();
+        self.jobs = new_jobs;
+    }
+}
+
+fn is_zip_splited_by_winrar(path: &Path) -> Result<bool> {
+    // 读取 4B 数据
+    let mut file_head: Vec<u8> = Vec::new();
+    File::open(path)?.take(4).read_to_end(&mut file_head)?;
+    Ok(file_head != STEGO_FEATURE[0].1)
 }

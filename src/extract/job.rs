@@ -9,9 +9,9 @@ use std::{
 };
 
 use anyhow::{bail, Result};
-use log::{debug, info};
+use log::{debug, info, warn};
 
-use crate::{COVER_FEATURE, STEGO_FEATURE};
+use crate::{extract::job, COVER_FEATURE, STEGO_FEATURE};
 
 /// # 解压任务
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -37,6 +37,28 @@ impl Display for ExtractJob {
 }
 
 impl ExtractJob {
+    // 通过数量与记录的最大卷数检查文件是否正确
+    pub fn check_file_number(&self) -> bool {
+        let flag = match self.kind {
+            ExtractJobKind::Split {
+                volume,
+                zip_splited_by_winrar,
+            } => {
+                if zip_splited_by_winrar {
+                    self.relevant.len() == volume
+                } else {
+                    self.relevant.len() == volume - 1
+                }
+            }
+            ExtractJobKind::Stego(_) => self.relevant.len() == 2,
+            ExtractJobKind::Normal => self.relevant.len() == 1,
+        };
+        if !flag {
+            warn!("解压任务 [{}] 文件数量不正常", self.package);
+        }
+        flag
+    }
+
     /// 搜索隐写文件中的压缩文件偏移
     pub fn find_target_file_offset(&self) -> Result<Option<usize>> {
         if let ExtractJobKind::Stego(offset) = self.kind {
@@ -147,7 +169,10 @@ impl ExtractJob {
 /// # 解压任务类型
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ExtractJobKind {
-    Split(usize),
+    Split {
+        volume: usize,
+        zip_splited_by_winrar: bool,
+    },
     Stego(usize),
     Normal,
 }
